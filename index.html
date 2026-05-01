@@ -7,8 +7,10 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- 簽名板套件 -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <!-- 引入 html2pdf 套件 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
-        /* ... (其餘 CSS 保持不變) ... */
+        /* 基本設定與之前相同，確保列印時只顯示報告內容 */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Noto Sans TC', sans-serif; }
         body { background: #f0f2f5; margin: 0; padding: 16px; padding-bottom: 80px; }
         .container { max-width: 700px; margin: 0 auto; }
@@ -43,149 +45,46 @@
         .confirm-section { text-align: center; margin-top: 20px; margin-bottom: 20px; }
         .toast-msg { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #34c759; color: white; padding: 12px 24px; border-radius: 40px; font-weight: 500; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .toast-error { background: #ff3b30; }
-        /* PDF 專用列印樣式 */
+        /* 隱藏列印時不必要的元素 */
         @media print {
-            body * { visibility: hidden; }
-            .printable-area, .printable-area * { visibility: visible; }
-            .printable-area { position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 20px; }
             .no-print, .no-print * { display: none !important; }
-            .sign-line { margin-top: 40px; border-top: 1px dashed #000; padding-top: 8px; }
-            button, .pagination, .scanner-area, .sync-status, .confirm-section, .delete-btn, .toggle-btn, #toggleLibraryBtn, #librarySection { display: none !important; }
         }
-        .printable-area { font-family: system-ui, 'Noto Sans TC', sans-serif; }
-        .printable-area .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .printable-area .info-table td { padding: 8px; border: 1px solid #aaa; }
-        .printable-area .info-table td:first-child { width: 30%; background: #f5f5f5; }
-        .printable-area .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .printable-area .item-table th, .printable-area .item-table td { border: 1px solid #aaa; padding: 8px; text-align: left; }
-        .printable-area .item-table th { background: #f5f5f5; }
-        .printable-area .sign-area { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 30px; justify-content: space-between; }
-        .printable-area .sign-box { width: 45%; }
-        .printable-area .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
-        .printable-area .sign-line img { max-height: 80px; }
-        .printable-area .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
     </style>
 </head>
 <body>
 <div class="container">
-    <!-- 1. 節目名稱及活動資訊 -->
+    <!-- 介面保持不變 -->
     <div class="card no-print">
         <h2>📋 節目名稱及活動資訊</h2>
-        <div class="form-group">
-            <label>🎪 節目名稱</label>
-            <input type="text" id="eventName" placeholder="例如：春節聯歡晚會">
-        </div>
-        <div class="form-group">
-            <label>📍 地點</label>
-            <input type="text" id="eventLocation" placeholder="例如：台北國際會議中心">
-        </div>
-        <div class="form-group">
-            <label>📅 使用日期</label>
-            <input type="date" id="eventDate">
-        </div>
+        <div class="form-group"><label>🎪 節目名稱</label><input type="text" id="eventName" placeholder="例如：春節聯歡晚會"></div>
+        <div class="form-group"><label>📍 地點</label><input type="text" id="eventLocation" placeholder="例如：台北國際會議中心"></div>
+        <div class="form-group"><label>📅 使用日期</label><input type="date" id="eventDate"></div>
     </div>
-
-    <!-- 2. 物品庫區塊（可隱藏） -->
     <div class="card no-print" id="librarySection">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <h2>📦 物品庫 <span id="totalCountBadge" class="badge">0</span></h2>
             <button id="toggleLibraryBtn" class="toggle-btn">🙈 隱藏</button>
         </div>
         <div id="syncStatus" class="sync-status">🔄 正在從 GitHub 載入物品庫...</div>
-        <div class="flex-row">
-            <input type="text" id="searchLibrary" placeholder="🔍 搜尋 Barcode 或 物品名稱" style="flex:1;">
-        </div>
-        <div style="max-height: 300px; overflow-y: auto;">
-            <table id="libraryTable">
-                <thead><table><th>Barcode</th><th>物品名稱</th><th></th></tr></thead>
-                <tbody id="libraryTbody"></tbody>
-            </table>
-        </div>
+        <div class="flex-row"><input type="text" id="searchLibrary" placeholder="🔍 搜尋 Barcode 或 物品名稱" style="flex:1;"></div>
+        <div style="max-height: 300px; overflow-y: auto;"><table id="libraryTable"><thead><tr><th>Barcode</th><th>物品名稱</th><th></th></tr></thead><tbody id="libraryTbody"></tbody></table></div>
         <div class="pagination" id="paginationControls"></div>
     </div>
-
-    <!-- 3. 掃描區 -->
-    <div class="card scanner-area no-print">
-        <h2>📷 掃描 Barcode</h2>
-        <div id="reader" style="width:100%;"></div>
-        <p id="scanStatus">✅ 點擊「開啟相機」開始掃描 (冷卻時間3秒)</p>
-        <button id="startScannerBtn">📱 開啟相機</button>
-        <button id="stopScannerBtn" class="secondary">⏹️ 停止相機</button>
-    </div>
-
-    <!-- 4. 今日領取清單 -->
-    <div class="card">
-        <h2>📋 今日領取清單 <span id="countDisplay">0 / 60</span></h2>
-        <div class="progress-info" id="progressMsg">尚未掃描任何物品</div>
-        <div style="max-height: 300px; overflow-y: auto;">
-            <table id="todayListTable">
-                <thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th><th></th></tr></thead>
-                <tbody id="todayListBody"></tbody>
-            </table>
-        </div>
-        <div class="flex-row">
-            <button id="savePdfBtn">📄 儲存為 PDF</button>
-            <button id="printBtn" class="secondary">🖨️ 列印簽名單</button>
-            <button id="clearTodayBtn" class="danger">🗑️ 清空今日清單</button>
-        </div>
-    </div>
-
-    <!-- 5. 提取人及歸還資料 -->
+    <div class="card scanner-area no-print"><h2>📷 掃描 Barcode</h2><div id="reader" style="width:100%;"></div><p id="scanStatus">✅ 點擊「開啟相機」開始掃描 (冷卻時間3秒)</p><button id="startScannerBtn">📱 開啟相機</button><button id="stopScannerBtn" class="secondary">⏹️ 停止相機</button></div>
+    <div class="card"><h2>📋 今日領取清單 <span id="countDisplay">0 / 60</span></h2><div class="progress-info" id="progressMsg">尚未掃描任何物品</div><div style="max-height: 300px; overflow-y: auto;"><table id="todayListTable"><thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th><th></th></tr></thead><tbody id="todayListBody"></tbody></table></div><div class="flex-row"><button id="savePdfBtn">📄 儲存為 PDF</button><button id="printBtn" class="secondary">🖨️ 列印簽名單</button><button id="clearTodayBtn" class="danger">🗑️ 清空今日清單</button></div></div>
     <div class="card no-print" id="extractorSection">
         <h2>✍️ 提取人及歸還資料</h2>
-        <div class="form-group">
-            <label>👤 提取人姓名</label>
-            <input type="text" id="extractorName" placeholder="請填寫提取人姓名">
-        </div>
-        <div class="form-group">
-            <label>🏢 部門</label>
-            <input type="text" id="extractorDepartment" placeholder="例如：資訊科技部">
-        </div>
-        <div class="form-group">
-            <label>💼 職位</label>
-            <input type="text" id="extractorPosition" placeholder="例如：工程師">
-        </div>
-        <div class="form-group">
-            <label>📞 聯絡電話</label>
-            <input type="tel" id="extractorPhone" placeholder="請填寫聯絡電話">
-        </div>
-        <div class="form-group">
-            <label>🖊️ 提取人簽名</label>
-            <div class="signature-area">
-                <canvas id="signatureCanvas" class="signatureCanvas" width="600" height="150"></canvas>
-                <div class="flex-row" style="margin-top: 8px;">
-                    <button id="clearSignatureBtn" class="outline">清除提取人簽名</button>
-                </div>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>📅 提取日期</label>
-            <input type="date" id="extractDate">
-        </div>
-        <div class="form-group">
-            <label>🔄 歸還日期</label>
-            <input type="date" id="returnDate">
-        </div>
-        <div class="form-group">
-            <label>📝 登記人姓名</label>
-            <input type="text" id="registrarName" placeholder="請填寫登記人姓名">
-        </div>
-        <div class="form-group">
-            <label>🖊️ 登記人簽名</label>
-            <div class="signature-area">
-                <canvas id="registrarCanvas" class="signatureCanvas" width="600" height="150"></canvas>
-                <div class="flex-row" style="margin-top: 8px;">
-                    <button id="clearRegistrarSignatureBtn" class="outline">清除登記人簽名</button>
-                </div>
-            </div>
-        </div>
+        <div class="form-group"><label>👤 提取人姓名</label><input type="text" id="extractorName" placeholder="請填寫提取人姓名"></div>
+        <div class="form-group"><label>🏢 部門</label><input type="text" id="extractorDepartment" placeholder="例如：資訊科技部"></div>
+        <div class="form-group"><label>💼 職位</label><input type="text" id="extractorPosition" placeholder="例如：工程師"></div>
+        <div class="form-group"><label>📞 聯絡電話</label><input type="tel" id="extractorPhone" placeholder="請填寫聯絡電話"></div>
+        <div class="form-group"><label>🖊️ 提取人簽名</label><div class="signature-area"><canvas id="signatureCanvas" class="signatureCanvas" width="600" height="150"></canvas><div class="flex-row" style="margin-top: 8px;"><button id="clearSignatureBtn" class="outline">清除提取人簽名</button></div></div></div>
+        <div class="form-group"><label>📅 提取日期</label><input type="date" id="extractDate"></div>
+        <div class="form-group"><label>🔄 歸還日期</label><input type="date" id="returnDate"></div>
+        <div class="form-group"><label>📝 登記人姓名</label><input type="text" id="registrarName" placeholder="請填寫登記人姓名"></div>
+        <div class="form-group"><label>🖊️ 登記人簽名</label><div class="signature-area"><canvas id="registrarCanvas" class="signatureCanvas" width="600" height="150"></canvas><div class="flex-row" style="margin-top: 8px;"><button id="clearRegistrarSignatureBtn" class="outline">清除登記人簽名</button></div></div></div>
     </div>
-
-    <!-- 6. 確認按鈕（儲存並匯出PDF） -->
-    <div class="card confirm-section no-print">
-        <button id="confirmBtn" class="confirm-btn">✅ 確認儲存 (並匯出PDF)</button>
-        <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會儲存資料，並自動下載PDF報告</p>
-    </div>
+    <div class="card confirm-section no-print"><button id="confirmBtn" class="confirm-btn">✅ 確認儲存 (並匯出PDF)</button><p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會儲存資料，並自動下載PDF報告</p></div>
 </div>
 
 <script>
@@ -308,8 +207,8 @@
     function clearSignature() { if (signaturePad) signaturePad.clear(); localStorage.removeItem("signature_data"); }
     function clearRegistrarSignature() { if (registrarSignaturePad) registrarSignaturePad.clear(); localStorage.removeItem("registrar_signature_data"); }
 
-    // 生成報告用的 HTML 結構 (與列印視窗相同)
-    function generatePrintableHTML() {
+    // 生成報告 HTML
+    function generateReportHTML() {
         const eventName = escapeHtml(eventNameInput.value) || "_____________";
         const eventLocation = escapeHtml(eventLocationInput.value) || "_____________";
         const eventDate = escapeHtml(eventDateInput.value) || "_____________";
@@ -332,7 +231,7 @@
         <head><meta charset="UTF-8"><title>物品領取簽名單</title>
         <style>
             body { font-family: system-ui, 'Noto Sans TC', sans-serif; margin: 0; padding: 20px; }
-            .printable-area { max-width: 800px; margin: 0 auto; }
+            .report-container { max-width: 800px; margin: 0 auto; }
             h1 { text-align: center; font-size: 24px; margin-bottom: 20px; }
             .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
             .info-table td { padding: 8px; border: 1px solid #aaa; }
@@ -345,33 +244,15 @@
             .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
             .sign-line img { max-height: 80px; }
             .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
-            @media print {
-                body { margin: 0; padding: 0; }
-                .printable-area { margin: 0; padding: 15px; }
-            }
         </style>
         </head>
         <body>
-        <div class="printable-area">
+        <div class="report-container">
             <h1>📋 物品領取簽名單</h1>
-            <table class="info-table">
-                <tr><td><strong>節目名稱</strong></td><td>${eventName}</td></tr>
-                <tr><td><strong>地點</strong></td><td>${eventLocation}</td></tr>
-                <tr><td><strong>使用日期</strong></td><td>${eventDate}</td></tr>
-                <tr><td><strong>提取人姓名</strong></td><td>${extractorName}</td></tr>
-                <tr><td><strong>部門</strong></td><td>${extractorDepartment}</td></tr>
-                <tr><td><strong>職位</strong></td><td>${extractorPosition}</td></tr>
-                <tr><td><strong>聯絡電話</strong></td><td>${extractorPhone}</td></tr>
-                <tr><td><strong>提取日期</strong></td><td>${extractDate}</td></tr>
-                <tr><td><strong>歸還日期</strong></td><td>${returnDate}</td></tr>
-                <tr><td><strong>登記人姓名</strong></td><td>${registrarName}</td></tr>
-            </table>
+            <table class="info-table"><tr><td><strong>節目名稱</strong></td><td>${eventName}</td></tr><tr><td><strong>地點</strong></td><td>${eventLocation}</td></tr><tr><td><strong>使用日期</strong></td><td>${eventDate}</td></tr><tr><td><strong>提取人姓名</strong></td><td>${extractorName}</td></tr><tr><td><strong>部門</strong></td><td>${extractorDepartment}</td></tr><tr><td><strong>職位</strong></td><td>${extractorPosition}</td></tr><tr><td><strong>聯絡電話</strong></td><td>${extractorPhone}</td></tr><tr><td><strong>提取日期</strong></td><td>${extractDate}</td></tr><tr><td><strong>歸還日期</strong></td><td>${returnDate}</td></tr><tr><td><strong>登記人姓名</strong></td><td>${registrarName}</td></tr></table>
             <h3>📦 領取物品清單 (共 ${todayItems.length} 件)</h3>
             <table class="item-table"><thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th></tr></thead><tbody>${itemsHtml}</tbody></table>
-            <div class="sign-area">
-                <div class="sign-box"><h3>✍️ 提取人簽名</h3><div class="sign-line">${extractorSigData ? `<img src="${extractorSigData}" alt="提取人簽名">` : ""}</div></div>
-                <div class="sign-box"><h3>✍️ 登記人簽名</h3><div class="sign-line">${registrarSigData ? `<img src="${registrarSigData}" alt="登記人簽名">` : ""}</div></div>
-            </div>
+            <div class="sign-area"><div class="sign-box"><h3>✍️ 提取人簽名</h3><div class="sign-line">${extractorSigData ? `<img src="${extractorSigData}" alt="提取人簽名">` : ""}</div></div><div class="sign-box"><h3>✍️ 登記人簽名</h3><div class="sign-line">${registrarSigData ? `<img src="${registrarSigData}" alt="登記人簽名">` : ""}</div></div></div>
             <div class="footer">此文件為正式領取憑證，請妥善保存</div>
         </div>
         </body>
@@ -380,37 +261,48 @@
     
     function escapeHtml(str) { if (!str) return ""; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
 
-    // 核心功能：使用瀏覽器列印功能儲存為 PDF (解決分頁問題)
+    // 儲存為 PDF (使用 html2pdf)
     async function saveAsPDF() {
-        const printContent = generatePrintableHTML();
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(printContent);
-        printWindow.document.close();
-        
-        // 等待內容加載完成後觸發列印
-        printWindow.onload = () => {
-            printWindow.print();
-            // 監聽列印對話框關閉後關閉視窗 (約1秒後)
-            setTimeout(() => { printWindow.close(); }, 1000);
+        const element = document.createElement('div');
+        element.innerHTML = generateReportHTML();
+        // 使用 html2pdf 並設定更好的分頁選項
+        const opt = {
+            margin: [0.5, 0.5, 0.5, 0.5],
+            filename: `領取報告_${eventDateInput.value || "日期"}_${extractorNameInput.value || "提取人"}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, letterRendering: true, useCORS: true, logging: false },
+            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
-        showToast("✅ 已開啟列印視窗，請選擇「另存為 PDF」");
+        try {
+            showToast("📄 正在產生 PDF，請稍候...");
+            await html2pdf().set(opt).from(element).save();
+            showToast("✅ PDF 已儲存到手機下載資料夾");
+        } catch (err) {
+            console.error("PDF 生成失敗:", err);
+            showToast(`❌ PDF 生成失敗: ${err.message}`, true);
+        }
     }
 
-    // 確認儲存：儲存資料 + 自動開啟列印視窗 (讓使用者另存PDF)
-    async function confirmAndSave() {
-        saveEventInfo();
-        saveSignatures();
-        showToast("✅ 資料已儲存，正在開啟報告視窗...");
-        await saveAsPDF();
-    }
-
+    // 列印簽名單
     function printSignatureSheet() {
-        const printContent = generatePrintableHTML();
+        const printContent = generateReportHTML();
         const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showToast("❌ 無法開啟列印視窗，請檢查是否允許彈出視窗", true);
+            return;
+        }
         printWindow.document.write(printContent);
         printWindow.document.close();
         printWindow.print();
-        setTimeout(() => { printWindow.close(); }, 1000);
+        printWindow.onafterprint = () => printWindow.close();
+    }
+
+    // 確認儲存：儲存資料並自動下載 PDF
+    async function confirmAndSave() {
+        saveEventInfo();
+        saveSignatures();
+        showToast("✅ 資料已儲存，正在產生 PDF...");
+        await saveAsPDF();
     }
 
     // 物品庫顯示/隱藏邏輯
@@ -431,7 +323,7 @@
         toggleLibraryBtn.style.background = isLibraryVisible ? "#34c759" : "#007aff";
     }
 
-    // 載入 CSV 物品庫 (保持不變)
+    // 載入 CSV 物品庫
     async function loadLibraryFromCSV() {
         syncStatusDiv.innerHTML = "🔄 正在從 GitHub 載入物品庫...";
         try {
@@ -530,7 +422,6 @@
     toggleLibraryBtn.onclick = toggleLibraryVisibility;
     searchInput.oninput = (e) => { currentSearchTerm = e.target.value; currentPage = 1; renderLibraryTable(); };
 
-    // 自動儲存
     eventNameInput.onchange = saveEventInfo; eventLocationInput.onchange = saveEventInfo; eventDateInput.onchange = saveEventInfo;
     extractorNameInput.onchange = saveEventInfo; extractorDepartmentInput.onchange = saveEventInfo; extractorPositionInput.onchange = saveEventInfo;
     extractorPhoneInput.onchange = saveEventInfo; extractDateInput.onchange = saveEventInfo; returnDateInput.onchange = saveEventInfo; registrarNameInput.onchange = saveEventInfo;
