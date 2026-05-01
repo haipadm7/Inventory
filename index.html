@@ -133,7 +133,7 @@
             <table id="todayListTable">
                 <thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th><th></th></tr></thead>
                 <tbody id="todayListBody"></tbody>
-            </tr>
+            </table>
         </div>
         <div class="flex-row">
             <button id="savePdfBtn">📄 儲存為 PDF</button>
@@ -181,10 +181,10 @@
         </div>
     </div>
 
-    <!-- 確認按鈕 -->
+    <!-- 確認按鈕（只儲存，不匯出） -->
     <div class="card confirm-section no-print">
-        <button id="confirmBtn" class="confirm-btn">✅ 確認儲存並匯出PDF</button>
-        <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會自動儲存所有資料，並匯出完整報告(PDF)到手機下載資料夾</p>
+        <button id="confirmBtn" class="confirm-btn">✅ 確認儲存</button>
+        <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會儲存所有資料到手機，下次打開會自動載入</p>
     </div>
 </div>
 
@@ -320,6 +320,13 @@
         localStorage.removeItem("registrar_signature_data");
     }
 
+    // 確認按鈕：只儲存資料，唔匯出
+    function confirmSave() {
+        saveEventInfo();
+        saveSignatures();
+        showToast("✅ 所有資料已儲存到手機");
+    }
+
     // 生成報告 HTML（同列印簽名單一模一樣嘅格式）
     function generateReportHTML() {
         const eventName = eventNameInput.value || "_____________";
@@ -337,7 +344,7 @@
             itemsHtml = "<tr><td colspan='3' style='text-align:center;'>（無領取記錄）</td></tr>";
         } else {
             todayItems.forEach((item, idx) => {
-                itemsHtml += `<tr><td>${idx+1}</td><td>${item.barcode}</td><td>${item.name}</td></tr>`;
+                itemsHtml += `<tr><td>${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td></tr>`;
             });
         }
         
@@ -406,8 +413,6 @@
             if (m === '<') return '&lt;';
             if (m === '>') return '&gt;';
             return m;
-        }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
-            return c;
         });
     }
 
@@ -435,7 +440,7 @@
         
         try {
             await html2pdf().set(opt).from(element).save();
-            showToast(`✅ PDF 已儲存到 Download 資料夾`);
+            showToast(`✅ PDF 已儲存到手機下載資料夾`);
         } catch (err) {
             console.error("PDF 生成失敗:", err);
             showToast(`❌ PDF 生成失敗: ${err.message}`, true);
@@ -451,19 +456,6 @@
         printWindow.document.write(reportHtml);
         printWindow.document.close();
         printWindow.print();
-    }
-
-    // 確認按鈕：儲存所有資料 + 匯出 PDF
-    async function confirmAndExport() {
-        // 先儲存所有資料到 LocalStorage
-        saveEventInfo();
-        saveSignatures();
-        
-        // 顯示提示
-        showToast("📁 正在產生 PDF，請稍候...");
-        
-        // 匯出 PDF
-        await saveAsPDF();
     }
 
     // 物品庫顯示/隱藏
@@ -698,7 +690,7 @@
     document.getElementById("setCooldownBtn").onclick = setCooldown;
     document.getElementById("clearSignatureBtn").onclick = () => { clearSignature(); };
     document.getElementById("clearRegistrarSignatureBtn").onclick = () => { clearRegistrarSignature(); };
-    document.getElementById("confirmBtn").onclick = confirmAndExport;
+    document.getElementById("confirmBtn").onclick = confirmSave;
     toggleLibraryBtn.onclick = toggleLibraryVisibility;
     searchInput.oninput = (e) => { currentSearchTerm = e.target.value; currentPage = 1; renderLibraryTable(); };
     
