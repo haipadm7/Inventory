@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>物品領取掃描器 - 完整版</title>
+    <title>物品領取掃描器 - 正式版</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- 簽名板套件 -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
@@ -17,11 +17,10 @@
         h2 { font-size: 1.5rem; margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         h3 { font-size: 1.2rem; margin-top: 8px; margin-bottom: 12px; color: #333; }
         .badge { background: #007aff; color: white; border-radius: 40px; padding: 4px 12px; font-size: 0.8rem; font-weight: normal; }
-        button { background: #007aff; border: none; color: white; padding: 10px 16px; border-radius: 40px; font-size: 1rem; font-weight: 500; cursor: pointer; transition: 0.2s; }
+        button { background: #007aff; border: none; color: white; padding: 10px 16px; border-radius: 40px; font-size: 1rem; font-weight: 500; cursor: pointer; transition: 0.2s; margin: 4px 0; }
         button.secondary { background: #8e8e93; }
         button.danger { background: #ff3b30; }
         button.outline { background: transparent; border: 1px solid #007aff; color: #007aff; }
-        button.success { background: #34c759; }
         button.confirm-btn { background: #34c759; font-size: 1.2rem; padding: 12px 24px; }
         .flex-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 12px; }
@@ -31,11 +30,10 @@
         .progress-info { background: #e9ecef; border-radius: 20px; padding: 8px 12px; font-weight: 500; margin-bottom: 12px; }
         #reader { width: 100%; max-width: 500px; margin: 0 auto; }
         .scanner-area { text-align: center; }
-        input, .search-box, textarea, select { padding: 10px; border-radius: 12px; border: 1px solid #ccc; width: 100%; font-size: 1rem; }
+        input, .search-box, textarea, select { padding: 10px; border-radius: 12px; border: 1px solid #ccc; width: 100%; font-size: 1rem; margin: 4px 0; }
         .pagination { display: flex; justify-content: center; gap: 12px; margin-top: 16px; }
         .page-btn { background: #e9ecef; color: #1c1c1e; padding: 6px 12px; border-radius: 30px; font-size: 0.9rem; border: none; cursor: pointer; }
         .page-btn.active { background: #007aff; color: white; }
-        .setting-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: #f8f9fa; padding: 8px 12px; border-radius: 20px; margin-top: 8px; }
         .hidden-section { display: none; }
         .toggle-btn { background: #34c759; }
         .form-group { margin-bottom: 16px; }
@@ -43,43 +41,31 @@
         .signature-area { border: 2px dashed #ccc; border-radius: 16px; padding: 10px; margin-top: 8px; }
         .signatureCanvas { border: 1px solid #ddd; border-radius: 12px; background: white; width: 100%; height: 150px; touch-action: none; }
         .sync-status { background: #e9ecef; border-radius: 20px; padding: 6px 12px; font-size: 0.8rem; margin-bottom: 10px; text-align: center; }
-        .confirm-section { text-align: center; margin-top: 20px; }
+        .confirm-section { text-align: center; margin-top: 20px; margin-bottom: 20px; }
         .toast-msg { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #34c759; color: white; padding: 12px 24px; border-radius: 40px; font-weight: 500; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .toast-error { background: #ff3b30; }
         @media print {
             body { background: white; padding: 0; }
             .no-print { display: none; }
-            .sign-line { margin-top: 40px; border-top: 1px dashed #000; padding-top: 8px; }
         }
         /* PDF 專用樣式 */
         .pdf-report { font-family: system-ui, 'Noto Sans TC', sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
         .pdf-report h1 { text-align: center; font-size: 24px; margin-bottom: 20px; }
         .pdf-report .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         .pdf-report .info-table td { padding: 8px; border: 1px solid #aaa; }
+        .pdf-report .info-table td:first-child { width: 30%; background: #f5f5f5; }
         .pdf-report .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
         .pdf-report .item-table th, .pdf-report .item-table td { border: 1px solid #aaa; padding: 8px; text-align: left; }
+        .pdf-report .item-table th { background: #f5f5f5; }
         .pdf-report .sign-area { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 30px; justify-content: space-between; }
         .pdf-report .sign-box { width: 45%; }
         .pdf-report .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
         .pdf-report .sign-line img { max-height: 80px; }
+        .pdf-report .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
     </style>
 </head>
 <body>
 <div class="container">
-    <!-- 基本設定 -->
-    <div class="card no-print">
-        <div class="setting-row">
-            <label>📅 每日領取上限：</label>
-            <input type="number" id="maxItemsInput" min="1" max="500" value="50" style="width: 80px;">
-            <button id="setMaxBtn" class="outline">設定</button>
-        </div>
-        <div class="setting-row">
-            <label>⏱️ 掃描冷卻時間 (秒)：</label>
-            <input type="number" id="cooldownInput" min="0.5" max="3" step="0.1" value="1.0" style="width: 80px;">
-            <button id="setCooldownBtn" class="outline">設定</button>
-        </div>
-    </div>
-
     <!-- 節目名稱及活動資訊 -->
     <div class="card no-print">
         <h2>📋 節目名稱及活動資訊</h2>
@@ -111,7 +97,7 @@
             <table id="libraryTable">
                 <thead><tr><th>Barcode</th><th>物品名稱</th><th></th></tr></thead>
                 <tbody id="libraryTbody"></tbody>
-            </table>
+            <table>
         </div>
         <div class="pagination" id="paginationControls"></div>
     </div>
@@ -127,7 +113,7 @@
 
     <!-- 今日領取清單 -->
     <div class="card">
-        <h2>📋 今日領取清單 <span id="countDisplay" class="badge">0 / 50</span></h2>
+        <h2>📋 今日領取清單 <span id="countDisplay">0 / 60</span></h2>
         <div class="progress-info" id="progressMsg">尚未掃描任何物品</div>
         <div style="max-height: 300px; overflow-y: auto;">
             <table id="todayListTable">
@@ -148,6 +134,18 @@
         <div class="form-group">
             <label>👤 提取人姓名</label>
             <input type="text" id="extractorName" placeholder="請填寫提取人姓名">
+        </div>
+        <div class="form-group">
+            <label>🏢 部門</label>
+            <input type="text" id="extractorDepartment" placeholder="例如：資訊科技部">
+        </div>
+        <div class="form-group">
+            <label>💼 職位</label>
+            <input type="text" id="extractorPosition" placeholder="例如：工程師">
+        </div>
+        <div class="form-group">
+            <label>📞 聯絡電話</label>
+            <input type="tel" id="extractorPhone" placeholder="請填寫聯絡電話">
         </div>
         <div class="form-group">
             <label>🖊️ 提取人簽名</label>
@@ -189,19 +187,21 @@
 </div>
 
 <script>
-    // 全域變數
+    // --- 固定參數 ---
+    const MAX_ITEMS = 60;          // 每日上限固定60件
+    const SCAN_COOLDOWN_MS = 3000; // 掃描冷卻時間固定3秒
+
+    // --- 全域變數 ---
     let library = {};
     let todayItems = [];
-    let MAX_ITEMS = 50;
-    let SCAN_COOLDOWN_MS = 1000;
     let lastScanTime = 0;
     let currentPage = 1;
     const PAGE_SIZE = 50;
     let currentSearchTerm = "";
     let html5QrCode = null;
     let scannerStarted = false;
-    let signaturePad = null;      // 提取人簽名
-    let registrarSignaturePad = null;  // 登記人簽名
+    let signaturePad = null;          // 提取人簽名
+    let registrarSignaturePad = null; // 登記人簽名
 
     // DOM 元素
     const librarySection = document.getElementById("librarySection");
@@ -213,8 +213,6 @@
     const todayListBody = document.getElementById("todayListBody");
     const countDisplay = document.getElementById("countDisplay");
     const progressMsg = document.getElementById("progressMsg");
-    const maxItemsInput = document.getElementById("maxItemsInput");
-    const cooldownInput = document.getElementById("cooldownInput");
     const syncStatusDiv = document.getElementById("syncStatus");
 
     // 活動及人員欄位
@@ -222,6 +220,9 @@
     const eventLocationInput = document.getElementById("eventLocation");
     const eventDateInput = document.getElementById("eventDate");
     const extractorNameInput = document.getElementById("extractorName");
+    const extractorDepartmentInput = document.getElementById("extractorDepartment");
+    const extractorPositionInput = document.getElementById("extractorPosition");
+    const extractorPhoneInput = document.getElementById("extractorPhone");
     const extractDateInput = document.getElementById("extractDate");
     const returnDateInput = document.getElementById("returnDate");
     const registrarNameInput = document.getElementById("registrarName");
@@ -250,6 +251,9 @@
         eventLocationInput.value = localStorage.getItem("event_location") || "";
         eventDateInput.value = localStorage.getItem("event_date") || "";
         extractorNameInput.value = localStorage.getItem("extractor_name") || "";
+        extractorDepartmentInput.value = localStorage.getItem("extractor_department") || "";
+        extractorPositionInput.value = localStorage.getItem("extractor_position") || "";
+        extractorPhoneInput.value = localStorage.getItem("extractor_phone") || "";
         extractDateInput.value = localStorage.getItem("extract_date") || "";
         returnDateInput.value = localStorage.getItem("return_date") || "";
         registrarNameInput.value = localStorage.getItem("registrar_name") || "";
@@ -260,6 +264,9 @@
         localStorage.setItem("event_location", eventLocationInput.value);
         localStorage.setItem("event_date", eventDateInput.value);
         localStorage.setItem("extractor_name", extractorNameInput.value);
+        localStorage.setItem("extractor_department", extractorDepartmentInput.value);
+        localStorage.setItem("extractor_position", extractorPositionInput.value);
+        localStorage.setItem("extractor_phone", extractorPhoneInput.value);
         localStorage.setItem("extract_date", extractDateInput.value);
         localStorage.setItem("return_date", returnDateInput.value);
         localStorage.setItem("registrar_name", registrarNameInput.value);
@@ -333,6 +340,9 @@
         const eventLocation = eventLocationInput.value || "_____________";
         const eventDate = eventDateInput.value || "_____________";
         const extractorName = extractorNameInput.value || "_____________";
+        const extractorDepartment = extractorDepartmentInput.value || "_____________";
+        const extractorPosition = extractorPositionInput.value || "_____________";
+        const extractorPhone = extractorPhoneInput.value || "_____________";
         const extractDate = extractDateInput.value || "_____________";
         const returnDate = returnDateInput.value || "_____________";
         const registrarName = registrarNameInput.value || "_____________";
@@ -379,6 +389,9 @@
                 <tr><td><strong>地點</strong></td><td>${escapeHtml(eventLocation)}</td></tr>
                 <tr><td><strong>使用日期</strong></td><td>${escapeHtml(eventDate)}</td></tr>
                 <tr><td><strong>提取人姓名</strong></td><td>${escapeHtml(extractorName)}</td></tr>
+                <tr><td><strong>部門</strong></td><td>${escapeHtml(extractorDepartment)}</td></tr>
+                <tr><td><strong>職位</strong></td><td>${escapeHtml(extractorPosition)}</td></tr>
+                <tr><td><strong>聯絡電話</strong></td><td>${escapeHtml(extractorPhone)}</td></tr>
                 <tr><td><strong>提取日期</strong></td><td>${escapeHtml(extractDate)}</td></tr>
                 <tr><td><strong>歸還日期</strong></td><td>${escapeHtml(returnDate)}</td></tr>
                 <tr><td><strong>登記人姓名</strong></td><td>${escapeHtml(registrarName)}</td></tr>
@@ -420,7 +433,7 @@
     async function saveAsPDF() {
         const reportHtml = generateReportHTML();
         
-        // 建立一個隱藏的 iframe 嚟產生 PDF
+        // 建立一個隱藏的視窗嚟產生 PDF
         const printWindow = window.open('', '_blank');
         printWindow.document.write(reportHtml);
         printWindow.document.close();
@@ -583,20 +596,17 @@
     function updateMaxDisplay() {
         countDisplay.innerText = `${todayItems.length} / ${MAX_ITEMS}`;
         if (todayItems.length >= MAX_ITEMS) {
-            progressMsg.innerText = `已達今日上限 ${MAX_ITEMS} 件，請清空或明天再掃描`;
+            progressMsg.innerText = `已達每日上限 ${MAX_ITEMS} 件，請清空或明天再掃描`;
         } else {
             progressMsg.innerText = `已領取 ${todayItems.length} 件，尚可領取 ${MAX_ITEMS - todayItems.length} 件`;
         }
     }
 
     function saveToday() { localStorage.setItem("today_items", JSON.stringify(todayItems)); renderTodayList(); }
-    function saveMaxLimit() { localStorage.setItem("max_items_limit", MAX_ITEMS); }
 
     function loadData() {
         const storedToday = localStorage.getItem("today_items");
         todayItems = storedToday ? JSON.parse(storedToday) : [];
-        const storedMax = localStorage.getItem("max_items_limit");
-        if (storedMax) { MAX_ITEMS = parseInt(storedMax); maxItemsInput.value = MAX_ITEMS; }
         renderTodayList();
         loadLibraryFromCSV();
         loadEventInfo();
@@ -620,19 +630,31 @@
         });
     }
 
-    // 掃描成功處理
+    // 掃描成功處理 (加入3秒冷卻)
     async function onScanSuccess(decodedText) {
         if (!scannerStarted) return;
         const now = Date.now();
         if (now - lastScanTime < SCAN_COOLDOWN_MS) return;
-        if (todayItems.length >= MAX_ITEMS) { alert(`已達每日上限 ${MAX_ITEMS} 件`); return; }
+        if (todayItems.length >= MAX_ITEMS) { 
+            alert(`已達每日上限 ${MAX_ITEMS} 件`); 
+            return; 
+        }
         const barcode = decodedText.trim();
-        if (todayItems.find(item => item.barcode === barcode)) { alert(`物品今日已經掃描過，不可重複領取`); return; }
+        if (todayItems.find(item => item.barcode === barcode)) { 
+            alert(`物品今日已經掃描過，不可重複領取`); 
+            return; 
+        }
         let itemName = library[barcode];
         if (!itemName) {
             let newName = prompt(`未找到物品「${barcode}」，請輸入物品名稱：`, "未知物品");
-            if (newName && newName.trim() !== "") { itemName = newName.trim(); library[barcode] = itemName; renderLibraryTable(); }
-            else { alert("沒有輸入名稱，跳過"); return; }
+            if (newName && newName.trim() !== "") { 
+                itemName = newName.trim(); 
+                library[barcode] = itemName; 
+                renderLibraryTable(); 
+            } else {
+                alert("沒有輸入名稱，跳過"); 
+                return;
+            }
         }
         lastScanTime = now;
         todayItems.push({ barcode, name: itemName, timestamp: new Date().toISOString() });
@@ -648,36 +670,12 @@
         if (scannerStarted) return;
         html5QrCode = new Html5Qrcode("reader");
         html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 300, height: 300 } }, onScanSuccess, (errMsg) => {})
-            .then(() => { scannerStarted = true; document.getElementById("scanStatus").innerText = "📸 相機已開啟"; })
+            .then(() => { scannerStarted = true; document.getElementById("scanStatus").innerText = "📸 相機已開啟 (冷卻3秒)"; })
             .catch(err => { alert("無法開啟相機，請確認已授予相機權限"); });
     }
 
     function stopScanner() {
         if (html5QrCode && scannerStarted) { html5QrCode.stop().then(() => { scannerStarted = false; document.getElementById("scanStatus").innerText = "⏹️ 相機已停止"; }).catch(()=>{}); }
-    }
-
-    function setMaxItems() {
-        let newMax = parseInt(maxItemsInput.value);
-        if (isNaN(newMax)) newMax = 50;
-        if (newMax < 1) newMax = 1;
-        if (newMax > 500) newMax = 500;
-        MAX_ITEMS = newMax;
-        maxItemsInput.value = MAX_ITEMS;
-        saveMaxLimit();
-        updateMaxDisplay();
-        if (todayItems.length > MAX_ITEMS) { todayItems = todayItems.slice(0, MAX_ITEMS); saveToday(); }
-        alert(`每日上限已設為 ${MAX_ITEMS} 件`);
-    }
-
-    function setCooldown() {
-        let newSecs = parseFloat(cooldownInput.value);
-        if (isNaN(newSecs)) newSecs = 1.0;
-        if (newSecs < 0.5) newSecs = 0.5;
-        if (newSecs > 3.0) newSecs = 3.0;
-        SCAN_COOLDOWN_MS = newSecs * 1000;
-        cooldownInput.value = newSecs.toFixed(1);
-        localStorage.setItem("scan_cooldown_ms", SCAN_COOLDOWN_MS);
-        alert(`掃描冷卻時間已設為 ${newSecs} 秒`);
     }
 
     // 事件綁定
@@ -686,8 +684,6 @@
     document.getElementById("savePdfBtn").onclick = saveAsPDF;
     document.getElementById("printBtn").onclick = printSignatureSheet;
     document.getElementById("clearTodayBtn").onclick = () => { if (confirm("清空今日所有記錄？")) { todayItems = []; saveToday(); } };
-    document.getElementById("setMaxBtn").onclick = setMaxItems;
-    document.getElementById("setCooldownBtn").onclick = setCooldown;
     document.getElementById("clearSignatureBtn").onclick = () => { clearSignature(); };
     document.getElementById("clearRegistrarSignatureBtn").onclick = () => { clearRegistrarSignature(); };
     document.getElementById("confirmBtn").onclick = confirmSave;
@@ -699,6 +695,9 @@
     eventLocationInput.onchange = saveEventInfo;
     eventDateInput.onchange = saveEventInfo;
     extractorNameInput.onchange = saveEventInfo;
+    extractorDepartmentInput.onchange = saveEventInfo;
+    extractorPositionInput.onchange = saveEventInfo;
+    extractorPhoneInput.onchange = saveEventInfo;
     extractDateInput.onchange = saveEventInfo;
     returnDateInput.onchange = saveEventInfo;
     registrarNameInput.onchange = saveEventInfo;
