@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>物品領取掃描器 - 穩定版</title>
+    <title>物品領取掃描器 - 正式版</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- 簽名板套件 -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
@@ -42,7 +42,7 @@
         .confirm-section { text-align: center; margin-top: 20px; margin-bottom: 20px; }
         .toast-msg { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #34c759; color: white; padding: 12px 24px; border-radius: 40px; font-weight: 500; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .toast-error { background: #ff3b30; }
-        /* --- 報告專用樣式 (確保列印完整) --- */
+        /* 報告專用樣式 */
         .report-for-print {
             font-family: system-ui, 'Noto Sans TC', sans-serif;
             max-width: 800px;
@@ -64,8 +64,8 @@
         @media print {
             body * { visibility: hidden; }
             .report-for-print, .report-for-print * { visibility: visible; }
-            .report-for-print { position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 0; }
-            button, .no-print, .scanner-area, .sync-status, .confirm-section { display: none !important; }
+            .report-for-print { position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 20px; }
+            .no-print, button, .scanner-area, .sync-status, .confirm-section { display: none !important; }
         }
     </style>
 </head>
@@ -225,7 +225,7 @@
     function clearSignature() { if (signaturePad) signaturePad.clear(); localStorage.removeItem("signature_data"); }
     function clearRegistrarSignature() { if (registrarSignaturePad) registrarSignaturePad.clear(); localStorage.removeItem("registrar_signature_data"); }
 
-    // 生成報告用的完整 HTML 文件
+    // 生成報告用的完整 HTML 文件 (已修正，移除多餘的「視」字)
     function generateReportHTML() {
         const eventName = escapeHtml(eventNameInput.value) || "_____________";
         const eventLocation = escapeHtml(eventLocationInput.value) || "_____________";
@@ -242,7 +242,7 @@
         
         let itemsHtml = "";
         if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td></tr>`;
-        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td>${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td></tr>`; });
+        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td>`; });
         
         return `<!DOCTYPE html>
         <html>
@@ -257,7 +257,8 @@
             .info-table td:first-child { width: 30%; background: #f5f5f5; }
             .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
             .item-table th, .item-table td { border: 1px solid #aaa; padding: 8px; text-align: left; }
-            .item-table th { background: #f5f5f5; }
+            .item-table th { background: #f5f5f5; text-align: center; }
+            .item-table td { text-align: left; }
             .sign-area { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 30px; justify-content: space-between; }
             .sign-box { width: 45%; }
             .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
@@ -265,17 +266,33 @@
             .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
             @media print {
                 body { padding: 0; }
-                .no-print { display: none; }
             }
         </style>
         </head>
         <body>
         <div class="report-for-print">
             <h1>📋 物品領取簽名單</h1>
-            <table class="info-table"><tr><td><strong>節目名稱</strong></td><td>${eventName}</td></tr><tr><td><strong>地點</strong></td><td>${eventLocation}</td></tr><tr><td><strong>使用日期</strong></td><td>${eventDate}</td></tr><tr><td><strong>提取人姓名</strong></td><td>${extractorName}</td></tr><tr><td><strong>部門</strong></td><td>${extractorDepartment}</td></tr><tr><td><strong>職位</strong></td><td>${extractorPosition}</td>視</tr><tr><td><strong>聯絡電話</strong></td><td>${extractorPhone}</td></tr><tr><td><strong>提取日期</strong></td><td>${extractDate}</td></tr><tr><td><strong>歸還日期</strong></td><td>${returnDate}</td></tr><tr><td><strong>登記人姓名</strong></td><td>${registrarName}</td></tr></table>
+            <table class="info-table">
+                <tr><td><strong>節目名稱</strong></td><td>${eventName}</td></tr>
+                <tr><td><strong>地點</strong></td><td>${eventLocation}</td></tr>
+                <tr><td><strong>使用日期</strong></td><td>${eventDate}</td></tr>
+                <tr><td><strong>提取人姓名</strong></td><td>${extractorName}</td></tr>
+                <tr><td><strong>部門</strong></td><td>${extractorDepartment}</td></tr>
+                <tr><td><strong>職位</strong></td><td>${extractorPosition}</td></tr>
+                <tr><td><strong>聯絡電話</strong></td><td>${extractorPhone}</td></tr>
+                <tr><td><strong>提取日期</strong></td><td>${extractDate}</td>膝
+                <tr><td><strong>歸還日期</strong></td><td>${returnDate}</td></tr>
+                <tr><td><strong>登記人姓名</strong></td><td>${registrarName}</td></tr>
+            </table>
             <h3>📦 領取物品清單 (共 ${todayItems.length} 件)</h3>
-            <table class="item-table"><thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th></tr></thead><tbody>${itemsHtml}</tbody></table>
-            <div class="sign-area"><div class="sign-box"><h3>✍️ 提取人簽名</h3><div class="sign-line">${extractorSigData ? `<img src="${extractorSigData}" alt="提取人簽名">` : ""}</div></div><div class="sign-box"><h3>✍️ 登記人簽名</h3><div class="sign-line">${registrarSigData ? `<img src="${registrarSigData}" alt="登記人簽名">` : ""}</div></div></div>
+            <table class="item-table">
+                <thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th></tr></thead>
+                <tbody>${itemsHtml}</tbody>
+            </table>
+            <div class="sign-area">
+                <div class="sign-box"><h3>✍️ 提取人簽名</h3><div class="sign-line">${extractorSigData ? `<img src="${extractorSigData}" alt="提取人簽名">` : ""}</div></div>
+                <div class="sign-box"><h3>✍️ 登記人簽名</h3><div class="sign-line">${registrarSigData ? `<img src="${registrarSigData}" alt="登記人簽名">` : ""}</div></div>
+            </div>
             <div class="footer">此文件為正式領取憑證，請妥善保存</div>
         </div>
         </body>
@@ -324,7 +341,7 @@
         toggleLibraryBtn.style.background = isLibraryVisible ? "#34c759" : "#007aff";
     }
 
-    // 載入 CSV 物品庫 (保持不變，省略部分重複程式碼)
+    // 載入 CSV 物品庫
     async function loadLibraryFromCSV() {
         syncStatusDiv.innerHTML = "🔄 正在從 GitHub 載入物品庫...";
         try {
