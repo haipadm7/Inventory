@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>物品領取掃描器 - 正式版</title>
+    <title>物品領取掃描器 - 完整功能版</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- 簽名板套件 -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
-    <!-- html2pdf 套件：將 HTML 轉成 PDF -->
+    <!-- html2pdf 套件 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Noto Sans TC', sans-serif; }
@@ -66,7 +66,7 @@
 </head>
 <body>
 <div class="container">
-    <!-- 節目名稱及活動資訊 -->
+    <!-- 1. 節目名稱及活動資訊 -->
     <div class="card no-print">
         <h2>📋 節目名稱及活動資訊</h2>
         <div class="form-group">
@@ -83,7 +83,7 @@
         </div>
     </div>
 
-    <!-- 物品庫區塊（可隱藏） -->
+    <!-- 2. 物品庫區塊（可隱藏） -->
     <div class="card no-print" id="librarySection">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <h2>📦 物品庫 <span id="totalCountBadge" class="badge">0</span></h2>
@@ -97,21 +97,21 @@
             <table id="libraryTable">
                 <thead><tr><th>Barcode</th><th>物品名稱</th><th></th></tr></thead>
                 <tbody id="libraryTbody"></tbody>
-            <table>
+            </table>
         </div>
         <div class="pagination" id="paginationControls"></div>
     </div>
 
-    <!-- 掃描區 -->
+    <!-- 3. 掃描區 (最重要的部分) -->
     <div class="card scanner-area no-print">
         <h2>📷 掃描 Barcode</h2>
         <div id="reader" style="width:100%;"></div>
-        <p id="scanStatus">✅ 點擊「開啟相機」開始掃描</p>
+        <p id="scanStatus">✅ 點擊「開啟相機」開始掃描 (冷卻時間3秒)</p>
         <button id="startScannerBtn">📱 開啟相機</button>
         <button id="stopScannerBtn" class="secondary">⏹️ 停止相機</button>
     </div>
 
-    <!-- 今日領取清單 -->
+    <!-- 4. 今日領取清單 -->
     <div class="card">
         <h2>📋 今日領取清單 <span id="countDisplay">0 / 60</span></h2>
         <div class="progress-info" id="progressMsg">尚未掃描任何物品</div>
@@ -128,7 +128,7 @@
         </div>
     </div>
 
-    <!-- 提取人及歸還資料 -->
+    <!-- 5. 提取人及歸還資料 (含新增欄位) -->
     <div class="card no-print" id="extractorSection">
         <h2>✍️ 提取人及歸還資料</h2>
         <div class="form-group">
@@ -179,7 +179,7 @@
         </div>
     </div>
 
-    <!-- 確認按鈕（只儲存，不匯出） -->
+    <!-- 6. 確認按鈕（只儲存，不匯出） -->
     <div class="card confirm-section no-print">
         <button id="confirmBtn" class="confirm-btn">✅ 確認儲存</button>
         <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會儲存所有資料到手機，下次打開會自動載入</p>
@@ -334,7 +334,7 @@
         showToast("✅ 所有資料已儲存到手機");
     }
 
-    // 生成報告 HTML（同列印簽名單一模一樣嘅格式）
+    // 生成報告 HTML
     function generateReportHTML() {
         const eventName = eventNameInput.value || "_____________";
         const eventLocation = eventLocationInput.value || "_____________";
@@ -429,19 +429,13 @@
         });
     }
 
-    // 儲存為 PDF（同列印格式一樣）
+    // 儲存為 PDF
     async function saveAsPDF() {
         const reportHtml = generateReportHTML();
-        
-        // 建立一個隱藏的視窗嚟產生 PDF
         const printWindow = window.open('', '_blank');
         printWindow.document.write(reportHtml);
         printWindow.document.close();
-        
-        // 等待圖片加載
         await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // 使用 html2pdf 轉換
         const element = printWindow.document.body;
         const opt = {
             margin: [0.5, 0.5, 0.5, 0.5],
@@ -450,7 +444,6 @@
             html2canvas: { scale: 2, useCORS: true },
             jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
         };
-        
         try {
             await html2pdf().set(opt).from(element).save();
             showToast(`✅ PDF 已儲存到手機下載資料夾`);
@@ -462,7 +455,6 @@
         }
     }
 
-    // 列印簽名單（開新視窗列印）
     function printSignatureSheet() {
         const reportHtml = generateReportHTML();
         const printWindow = window.open('', '_blank');
@@ -630,7 +622,7 @@
         });
     }
 
-    // 掃描成功處理 (加入3秒冷卻)
+    // 掃描成功處理
     async function onScanSuccess(decodedText) {
         if (!scannerStarted) return;
         const now = Date.now();
@@ -690,7 +682,7 @@
     toggleLibraryBtn.onclick = toggleLibraryVisibility;
     searchInput.oninput = (e) => { currentSearchTerm = e.target.value; currentPage = 1; renderLibraryTable(); };
     
-    // 自動儲存活動資訊（輸入時儲存）
+    // 自動儲存活動資訊
     eventNameInput.onchange = saveEventInfo;
     eventLocationInput.onchange = saveEventInfo;
     eventDateInput.onchange = saveEventInfo;
