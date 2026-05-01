@@ -7,9 +7,8 @@
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- 簽名板套件 -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
-    <!-- html2pdf 套件 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <style>
+        /* ... (其餘 CSS 保持不變) ... */
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Noto Sans TC', sans-serif; }
         body { background: #f0f2f5; margin: 0; padding: 16px; padding-bottom: 80px; }
         .container { max-width: 700px; margin: 0 auto; }
@@ -44,10 +43,27 @@
         .confirm-section { text-align: center; margin-top: 20px; margin-bottom: 20px; }
         .toast-msg { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #34c759; color: white; padding: 12px 24px; border-radius: 40px; font-weight: 500; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .toast-error { background: #ff3b30; }
+        /* PDF 專用列印樣式 */
         @media print {
-            body { background: white; padding: 0; }
-            .no-print { display: none; }
+            body * { visibility: hidden; }
+            .printable-area, .printable-area * { visibility: visible; }
+            .printable-area { position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 20px; }
+            .no-print, .no-print * { display: none !important; }
+            .sign-line { margin-top: 40px; border-top: 1px dashed #000; padding-top: 8px; }
+            button, .pagination, .scanner-area, .sync-status, .confirm-section, .delete-btn, .toggle-btn, #toggleLibraryBtn, #librarySection { display: none !important; }
         }
+        .printable-area { font-family: system-ui, 'Noto Sans TC', sans-serif; }
+        .printable-area .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .printable-area .info-table td { padding: 8px; border: 1px solid #aaa; }
+        .printable-area .info-table td:first-child { width: 30%; background: #f5f5f5; }
+        .printable-area .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .printable-area .item-table th, .printable-area .item-table td { border: 1px solid #aaa; padding: 8px; text-align: left; }
+        .printable-area .item-table th { background: #f5f5f5; }
+        .printable-area .sign-area { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 30px; justify-content: space-between; }
+        .printable-area .sign-box { width: 45%; }
+        .printable-area .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
+        .printable-area .sign-line img { max-height: 80px; }
+        .printable-area .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
     </style>
 </head>
 <body>
@@ -81,7 +97,7 @@
         </div>
         <div style="max-height: 300px; overflow-y: auto;">
             <table id="libraryTable">
-                <thead><tr><th>Barcode</th><th>物品名稱</th><th></th><tr></thead>
+                <thead><table><th>Barcode</th><th>物品名稱</th><th></th></tr></thead>
                 <tbody id="libraryTbody"></tbody>
             </table>
         </div>
@@ -165,7 +181,7 @@
         </div>
     </div>
 
-    <!-- 6. 確認按鈕（儲存並自動匯出PDF） -->
+    <!-- 6. 確認按鈕（儲存並匯出PDF） -->
     <div class="card confirm-section no-print">
         <button id="confirmBtn" class="confirm-btn">✅ 確認儲存 (並匯出PDF)</button>
         <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會儲存資料，並自動下載PDF報告</p>
@@ -292,23 +308,23 @@
     function clearSignature() { if (signaturePad) signaturePad.clear(); localStorage.removeItem("signature_data"); }
     function clearRegistrarSignature() { if (registrarSignaturePad) registrarSignaturePad.clear(); localStorage.removeItem("registrar_signature_data"); }
 
-    // 生成與列印格式完全相同的報告 HTML
-    function generateReportHTML() {
-        const eventName = eventNameInput.value || "_____________";
-        const eventLocation = eventLocationInput.value || "_____________";
-        const eventDate = eventDateInput.value || "_____________";
-        const extractorName = extractorNameInput.value || "_____________";
-        const extractorDepartment = extractorDepartmentInput.value || "_____________";
-        const extractorPosition = extractorPositionInput.value || "_____________";
-        const extractorPhone = extractorPhoneInput.value || "_____________";
-        const extractDate = extractDateInput.value || "_____________";
-        const returnDate = returnDateInput.value || "_____________";
-        const registrarName = registrarNameInput.value || "_____________";
+    // 生成報告用的 HTML 結構 (與列印視窗相同)
+    function generatePrintableHTML() {
+        const eventName = escapeHtml(eventNameInput.value) || "_____________";
+        const eventLocation = escapeHtml(eventLocationInput.value) || "_____________";
+        const eventDate = escapeHtml(eventDateInput.value) || "_____________";
+        const extractorName = escapeHtml(extractorNameInput.value) || "_____________";
+        const extractorDepartment = escapeHtml(extractorDepartmentInput.value) || "_____________";
+        const extractorPosition = escapeHtml(extractorPositionInput.value) || "_____________";
+        const extractorPhone = escapeHtml(extractorPhoneInput.value) || "_____________";
+        const extractDate = escapeHtml(extractDateInput.value) || "_____________";
+        const returnDate = escapeHtml(returnDateInput.value) || "_____________";
+        const registrarName = escapeHtml(registrarNameInput.value) || "_____________";
         const extractorSigData = (signaturePad && !signaturePad.isEmpty()) ? signaturePad.toDataURL() : "";
         const registrarSigData = (registrarSignaturePad && !registrarSignaturePad.isEmpty()) ? registrarSignaturePad.toDataURL() : "";
         
         let itemsHtml = "";
-        if (todayItems.length === 0) itemsHtml = "<tr><td colspan='3' style='text-align:center;'>（無領取記錄）</td></tr>";
+        if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td></tr>`;
         else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td>${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td></tr>`; });
         
         return `<!DOCTYPE html>
@@ -316,7 +332,7 @@
         <head><meta charset="UTF-8"><title>物品領取簽名單</title>
         <style>
             body { font-family: system-ui, 'Noto Sans TC', sans-serif; margin: 0; padding: 20px; }
-            .report-container { max-width: 800px; margin: 0 auto; }
+            .printable-area { max-width: 800px; margin: 0 auto; }
             h1 { text-align: center; font-size: 24px; margin-bottom: 20px; }
             .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
             .info-table td { padding: 8px; border: 1px solid #aaa; }
@@ -329,22 +345,26 @@
             .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
             .sign-line img { max-height: 80px; }
             .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
+            @media print {
+                body { margin: 0; padding: 0; }
+                .printable-area { margin: 0; padding: 15px; }
+            }
         </style>
         </head>
         <body>
-        <div class="report-container">
+        <div class="printable-area">
             <h1>📋 物品領取簽名單</h1>
             <table class="info-table">
-                <tr><td><strong>節目名稱</strong></td><td>${escapeHtml(eventName)}</td></tr>
-                <tr><td><strong>地點</strong></td><td>${escapeHtml(eventLocation)}</td></tr>
-                <tr><td><strong>使用日期</strong></td><td>${escapeHtml(eventDate)}</td></tr>
-                <tr><td><strong>提取人姓名</strong></td><td>${escapeHtml(extractorName)}</td></tr>
-                <tr><td><strong>部門</strong></td><td>${escapeHtml(extractorDepartment)}</td></tr>
-                <tr><td><strong>職位</strong></td><td>${escapeHtml(extractorPosition)}</td></tr>
-                <tr><td><strong>聯絡電話</strong></td><td>${escapeHtml(extractorPhone)}</td></tr>
-                <tr><td><strong>提取日期</strong></td><td>${escapeHtml(extractDate)}</td></tr>
-                <tr><td><strong>歸還日期</strong></td><td>${escapeHtml(returnDate)}</td></tr>
-                <tr><td><strong>登記人姓名</strong></td><td>${escapeHtml(registrarName)}</td></tr>
+                <tr><td><strong>節目名稱</strong></td><td>${eventName}</td></tr>
+                <tr><td><strong>地點</strong></td><td>${eventLocation}</td></tr>
+                <tr><td><strong>使用日期</strong></td><td>${eventDate}</td></tr>
+                <tr><td><strong>提取人姓名</strong></td><td>${extractorName}</td></tr>
+                <tr><td><strong>部門</strong></td><td>${extractorDepartment}</td></tr>
+                <tr><td><strong>職位</strong></td><td>${extractorPosition}</td></tr>
+                <tr><td><strong>聯絡電話</strong></td><td>${extractorPhone}</td></tr>
+                <tr><td><strong>提取日期</strong></td><td>${extractDate}</td></tr>
+                <tr><td><strong>歸還日期</strong></td><td>${returnDate}</td></tr>
+                <tr><td><strong>登記人姓名</strong></td><td>${registrarName}</td></tr>
             </table>
             <h3>📦 領取物品清單 (共 ${todayItems.length} 件)</h3>
             <table class="item-table"><thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th></tr></thead><tbody>${itemsHtml}</tbody></table>
@@ -360,42 +380,37 @@
     
     function escapeHtml(str) { if (!str) return ""; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
 
-    // 核心功能：下載 PDF (與列印格式相同)
-    async function downloadPDF() {
-        const reportHtml = generateReportHTML();
+    // 核心功能：使用瀏覽器列印功能儲存為 PDF (解決分頁問題)
+    async function saveAsPDF() {
+        const printContent = generatePrintableHTML();
         const printWindow = window.open('', '_blank');
-        printWindow.document.write(reportHtml);
+        printWindow.document.write(printContent);
         printWindow.document.close();
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const element = printWindow.document.body;
-        const opt = {
-            margin: [0.5, 0.5, 0.5, 0.5],
-            filename: `領取報告_${eventDateInput.value || "日期"}_${extractorNameInput.value || "提取人"}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
+        
+        // 等待內容加載完成後觸發列印
+        printWindow.onload = () => {
+            printWindow.print();
+            // 監聽列印對話框關閉後關閉視窗 (約1秒後)
+            setTimeout(() => { printWindow.close(); }, 1000);
         };
-        try {
-            await html2pdf().set(opt).from(element).save();
-            showToast(`✅ PDF 已儲存到手機下載資料夾`);
-        } catch (err) { showToast(`❌ PDF 生成失敗: ${err.message}`, true); }
-        finally { printWindow.close(); }
+        showToast("✅ 已開啟列印視窗，請選擇「另存為 PDF」");
     }
 
-    // 確認儲存：儲存資料 + 自動下載 PDF
+    // 確認儲存：儲存資料 + 自動開啟列印視窗 (讓使用者另存PDF)
     async function confirmAndSave() {
         saveEventInfo();
         saveSignatures();
-        showToast("✅ 資料已儲存，正在產生PDF...");
-        await downloadPDF();
+        showToast("✅ 資料已儲存，正在開啟報告視窗...");
+        await saveAsPDF();
     }
 
     function printSignatureSheet() {
-        const reportHtml = generateReportHTML();
+        const printContent = generatePrintableHTML();
         const printWindow = window.open('', '_blank');
-        printWindow.document.write(reportHtml);
+        printWindow.document.write(printContent);
         printWindow.document.close();
         printWindow.print();
+        setTimeout(() => { printWindow.close(); }, 1000);
     }
 
     // 物品庫顯示/隱藏邏輯
@@ -416,7 +431,7 @@
         toggleLibraryBtn.style.background = isLibraryVisible ? "#34c759" : "#007aff";
     }
 
-    // 載入 CSV 物品庫
+    // 載入 CSV 物品庫 (保持不變)
     async function loadLibraryFromCSV() {
         syncStatusDiv.innerHTML = "🔄 正在從 GitHub 載入物品庫...";
         try {
@@ -506,7 +521,7 @@
     // 事件綁定
     document.getElementById("startScannerBtn").onclick = startScanner;
     document.getElementById("stopScannerBtn").onclick = stopScanner;
-    document.getElementById("savePdfBtn").onclick = downloadPDF;
+    document.getElementById("savePdfBtn").onclick = saveAsPDF;
     document.getElementById("printBtn").onclick = printSignatureSheet;
     document.getElementById("clearTodayBtn").onclick = () => { if (confirm("清空今日所有記錄？")) { todayItems = []; saveToday(); } };
     document.getElementById("clearSignatureBtn").onclick = clearSignature;
@@ -514,6 +529,8 @@
     document.getElementById("confirmBtn").onclick = confirmAndSave;
     toggleLibraryBtn.onclick = toggleLibraryVisibility;
     searchInput.oninput = (e) => { currentSearchTerm = e.target.value; currentPage = 1; renderLibraryTable(); };
+
+    // 自動儲存
     eventNameInput.onchange = saveEventInfo; eventLocationInput.onchange = saveEventInfo; eventDateInput.onchange = saveEventInfo;
     extractorNameInput.onchange = saveEventInfo; extractorDepartmentInput.onchange = saveEventInfo; extractorPositionInput.onchange = saveEventInfo;
     extractorPhoneInput.onchange = saveEventInfo; extractDateInput.onchange = saveEventInfo; returnDateInput.onchange = saveEventInfo; registrarNameInput.onchange = saveEventInfo;
