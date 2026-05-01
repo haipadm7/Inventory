@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>物品領取掃描器 - 防重複版</title>
+    <title>物品領取掃描器</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         * { box-sizing: border-box; font-family: system-ui, 'Segoe UI', 'Noto Sans TC', sans-serif; }
@@ -32,6 +32,8 @@
         .setting-row label { font-weight: 500; }
         .setting-row input { width: 80px; text-align: center; }
         .cooldown-msg { color: #ff3b30; font-size: 0.8rem; margin-left: 8px; display: inline-block; }
+        .toggle-btn { background: #34c759; }
+        .hidden-section { display: none; }
         @media print {
             body { background: white; padding: 0; }
             .no-print { display: none; }
@@ -57,9 +59,13 @@
         </div>
     </div>
 
-    <div class="card no-print">
-        <h2>📦 物品庫 <span id="totalCountBadge" class="badge">0</span></h2>
-        <div id="syncStatus" class="sync-status">🔄 正在從 NAS 載入物品庫...</div>
+    <!-- 物品庫區塊，可以隱藏 -->
+    <div class="card no-print" id="librarySection">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+            <h2>📦 物品庫 <span id="totalCountBadge" class="badge">0</span></h2>
+            <button id="toggleLibraryBtn" class="toggle-btn">🙈 隱藏</button>
+        </div>
+        <div id="syncStatus" class="sync-status">🔄 正在從 GitHub 載入物品庫...</div>
         <div class="flex-row">
             <input type="text" id="searchLibrary" placeholder="🔍 搜尋 Barcode 或 物品名稱" style="flex:1;">
         </div>
@@ -110,6 +116,8 @@
     let scannerStarted = false;
 
     // --- DOM 元素 ---
+    const librarySection = document.getElementById("librarySection");
+    const toggleLibraryBtn = document.getElementById("toggleLibraryBtn");
     const libraryTbody = document.getElementById("libraryTbody");
     const totalCountBadge = document.getElementById("totalCountBadge");
     const paginationDiv = document.getElementById("paginationControls");
@@ -120,6 +128,42 @@
     const maxItemsInput = document.getElementById("maxItemsInput");
     const cooldownInput = document.getElementById("cooldownInput");
     const syncStatusDiv = document.getElementById("syncStatus");
+
+    // --- 物品庫顯示/隱藏功能 ---
+    let isLibraryVisible = true;
+    
+    function toggleLibraryVisibility() {
+        isLibraryVisible = !isLibraryVisible;
+        if (isLibraryVisible) {
+            librarySection.classList.remove("hidden-section");
+            toggleLibraryBtn.innerHTML = "🙈 隱藏";
+            toggleLibraryBtn.style.background = "#34c759";
+        } else {
+            librarySection.classList.add("hidden-section");
+            toggleLibraryBtn.innerHTML = "🐵 顯示物品庫";
+            toggleLibraryBtn.style.background = "#007aff";
+        }
+        // 儲存使用者偏好
+        localStorage.setItem("library_visible", isLibraryVisible);
+    }
+    
+    function loadLibraryVisibility() {
+        const saved = localStorage.getItem("library_visible");
+        if (saved !== null) {
+            isLibraryVisible = saved === "true";
+        } else {
+            isLibraryVisible = true; // 預設顯示
+        }
+        if (isLibraryVisible) {
+            librarySection.classList.remove("hidden-section");
+            toggleLibraryBtn.innerHTML = "🙈 隱藏";
+            toggleLibraryBtn.style.background = "#34c759";
+        } else {
+            librarySection.classList.add("hidden-section");
+            toggleLibraryBtn.innerHTML = "🐵 顯示物品庫";
+            toggleLibraryBtn.style.background = "#007aff";
+        }
+    }
 
     // --- 初始化 & 載入資料 ---
     function loadCooldownSetting() {
@@ -147,11 +191,10 @@
         alert(`掃描冷卻時間已設為 ${newSecs} 秒`);
     }
 
-    // 從 NAS 載入物品庫 CSV
-    async function loadLibraryFromNAS() {
-        syncStatusDiv.innerHTML = "🔄 正在從 NAS 載入物品庫...";
+    // 從 GitHub 載入物品庫 CSV
+    async function loadLibraryFromCSV() {
+        syncStatusDiv.innerHTML = "🔄 正在從 GitHub 載入物品庫...";
         try {
-            // 假設 CSV 檔案同 index.html 放晌同一資料夾，叫 items.csv
             const response = await fetch("items.csv?" + new Date().getTime());
             if (!response.ok) throw new Error("無法載入 items.csv");
             const csvText = await response.text();
@@ -162,7 +205,10 @@
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (line === "") continue;
-                // 簡單解析 CSV (支援引號)
+                // 跳過標題行 (檢查是否包含 "barcode" 或 "Barcode")
+                if (i === 0 && (line.toLowerCase().includes("barcode") || line.toLowerCase().includes("名稱"))) {
+                    continue;
+                }
                 let parts = line.split(",");
                 if (parts.length < 2) continue;
                 let barcode = parts[0].replace(/^"|"$/g, '').trim();
@@ -173,11 +219,11 @@
                 }
             }
             library = newLibrary;
-            syncStatusDiv.innerHTML = `✅ 已從 NAS 載入 ${count} 件物品`;
+            syncStatusDiv.innerHTML = `✅ 已從 GitHub 載入 ${count} 件物品`;
             renderLibraryTable();
         } catch (error) {
             console.error("載入失敗:", error);
-            syncStatusDiv.innerHTML = "⚠️ 無法載入 items.csv，請確認檔案存在同一資料夾";
+            syncStatusDiv.innerHTML = "⚠️ 無法載入 items.csv，請確認檔案存在";
             library = {};
             renderLibraryTable();
         }
@@ -208,7 +254,7 @@
             const delBtn = document.createElement("button");
             delBtn.innerText = "刪除";
             delBtn.className = "delete-btn";
-            // 注意：刪除只係隱藏，唔會改 NAS 上嘅 CSV
+            // 注意：刪除只係隱藏，唔會改 CSV 檔案
             delBtn.onclick = () => { 
                 delete library[item.barcode]; 
                 renderLibraryTable(); 
@@ -273,7 +319,7 @@
             maxItemsInput.value = MAX_ITEMS;
         }
         renderTodayList();
-        loadLibraryFromNAS(); // 從 NAS 載入物品庫
+        loadLibraryFromCSV(); // 從 GitHub 載入物品庫
     }
 
     function renderTodayList() {
@@ -327,7 +373,7 @@
             let newName = prompt(`未找到物品「${barcode}」，請輸入物品名稱：`, "未知物品");
             if (newName && newName.trim() !== "") { 
                 itemName = newName.trim(); 
-                // 可選：是否要將新物品加回 NAS 的 library？此處只加到當前 session 的 library 變數
+                // 可選：是否要將新物品加回 library？此處只加到當前 session 的 library 變數
                 library[barcode] = itemName;
                 renderLibraryTable(); // 更新顯示
             } else {
@@ -413,9 +459,9 @@
         if (todayItems.length === 0) { alert("無記錄可列印"); return; }
         const now = new Date().toLocaleString();
         let html = `<html><head><meta charset="UTF-8"><title>領取簽名單</title><style>body{font-family:system-ui;margin:20px;} table{border-collapse:collapse;width:100%} th,td{border:1px solid #aaa;padding:8px} .sign-area{display:flex;justify-content:space-between;margin-top:40px} .sign-line{width:45%;border-top:1px solid #000;padding-top:8px;text-align:center}</style></head>
-        <body><h2>每日領取物品清單</h2><p>日期：${now}</p><p>總數：${todayItems.length} / 上限 ${MAX_ITEMS} 件</p><table><thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th></tr></thead><tbody>`;
+        <body><h2>每日領取物品清單</h2><p>日期：${now}</p><p>總數：${todayItems.length} / 上限 ${MAX_ITEMS} 件</p></table><thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th></tr></thead><tbody>`;
         todayItems.forEach((item, idx) => { html += `<tr><td>${idx+1}</td><td>${item.barcode}</td><td>${item.name}</td></tr>`; });
-        html += `</tbody><tr><div class="sign-area"><div class="sign-line">領取人簽名：_________________</div><div class="sign-line">核對人員：_________________</div></div></body></html>`;
+        html += `</tbody></table><div class="sign-area"><div class="sign-line">領取人簽名：_________________</div><div class="sign-line">核對人員：_________________</div></div></body></html>`;
         const w = window.open('', '_blank');
         w.document.write(html);
         w.document.close();
@@ -451,6 +497,7 @@
     };
     document.getElementById("setMaxBtn").onclick = setMaxItems;
     document.getElementById("setCooldownBtn").onclick = setCooldown;
+    toggleLibraryBtn.onclick = toggleLibraryVisibility;
     searchInput.oninput = (e) => { 
         currentSearchTerm = e.target.value; 
         currentPage = 1; 
@@ -459,6 +506,7 @@
 
     loadData();
     loadCooldownSetting();
+    loadLibraryVisibility();
 
     window.onbeforeunload = () => { 
         if (html5QrCode && scannerStarted) html5QrCode.stop().catch(()=>{}); 
