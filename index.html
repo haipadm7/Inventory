@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>物品領取掃描器 - 完整功能版</title>
+    <title>物品領取掃描器 - 正式版</title>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- 簽名板套件 -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
@@ -48,20 +48,6 @@
             body { background: white; padding: 0; }
             .no-print { display: none; }
         }
-        /* PDF 專用樣式 */
-        .pdf-report { font-family: system-ui, 'Noto Sans TC', sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-        .pdf-report h1 { text-align: center; font-size: 24px; margin-bottom: 20px; }
-        .pdf-report .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .pdf-report .info-table td { padding: 8px; border: 1px solid #aaa; }
-        .pdf-report .info-table td:first-child { width: 30%; background: #f5f5f5; }
-        .pdf-report .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .pdf-report .item-table th, .pdf-report .item-table td { border: 1px solid #aaa; padding: 8px; text-align: left; }
-        .pdf-report .item-table th { background: #f5f5f5; }
-        .pdf-report .sign-area { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 30px; justify-content: space-between; }
-        .pdf-report .sign-box { width: 45%; }
-        .pdf-report .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
-        .pdf-report .sign-line img { max-height: 80px; }
-        .pdf-report .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
     </style>
 </head>
 <body>
@@ -95,14 +81,14 @@
         </div>
         <div style="max-height: 300px; overflow-y: auto;">
             <table id="libraryTable">
-                <thead><tr><th>Barcode</th><th>物品名稱</th><th></th></tr></thead>
+                <thead><tr><th>Barcode</th><th>物品名稱</th><th></th><tr></thead>
                 <tbody id="libraryTbody"></tbody>
             </table>
         </div>
         <div class="pagination" id="paginationControls"></div>
     </div>
 
-    <!-- 3. 掃描區 (最重要的部分) -->
+    <!-- 3. 掃描區 -->
     <div class="card scanner-area no-print">
         <h2>📷 掃描 Barcode</h2>
         <div id="reader" style="width:100%;"></div>
@@ -128,7 +114,7 @@
         </div>
     </div>
 
-    <!-- 5. 提取人及歸還資料 (含新增欄位) -->
+    <!-- 5. 提取人及歸還資料 -->
     <div class="card no-print" id="extractorSection">
         <h2>✍️ 提取人及歸還資料</h2>
         <div class="form-group">
@@ -179,17 +165,17 @@
         </div>
     </div>
 
-    <!-- 6. 確認按鈕（只儲存，不匯出） -->
+    <!-- 6. 確認按鈕（儲存並自動匯出PDF） -->
     <div class="card confirm-section no-print">
-        <button id="confirmBtn" class="confirm-btn">✅ 確認儲存</button>
-        <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會儲存所有資料到手機，下次打開會自動載入</p>
+        <button id="confirmBtn" class="confirm-btn">✅ 確認儲存 (並匯出PDF)</button>
+        <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會儲存資料，並自動下載PDF報告</p>
     </div>
 </div>
 
 <script>
     // --- 固定參數 ---
-    const MAX_ITEMS = 60;          // 每日上限固定60件
-    const SCAN_COOLDOWN_MS = 3000; // 掃描冷卻時間固定3秒
+    const MAX_ITEMS = 60;
+    const SCAN_COOLDOWN_MS = 3000;
 
     // --- 全域變數 ---
     let library = {};
@@ -200,8 +186,8 @@
     let currentSearchTerm = "";
     let html5QrCode = null;
     let scannerStarted = false;
-    let signaturePad = null;          // 提取人簽名
-    let registrarSignaturePad = null; // 登記人簽名
+    let signaturePad = null;
+    let registrarSignaturePad = null;
 
     // DOM 元素
     const librarySection = document.getElementById("librarySection");
@@ -215,7 +201,7 @@
     const progressMsg = document.getElementById("progressMsg");
     const syncStatusDiv = document.getElementById("syncStatus");
 
-    // 活動及人員欄位
+    // 欄位
     const eventNameInput = document.getElementById("eventName");
     const eventLocationInput = document.getElementById("eventLocation");
     const eventDateInput = document.getElementById("eventDate");
@@ -227,7 +213,6 @@
     const returnDateInput = document.getElementById("returnDate");
     const registrarNameInput = document.getElementById("registrarName");
 
-    // 顯示提示訊息
     function showToast(message, isError = false) {
         const toast = document.createElement("div");
         toast.className = "toast-msg";
@@ -237,7 +222,6 @@
         setTimeout(() => toast.remove(), 3000);
     }
 
-    // 設定今日日期
     function setDefaultDates() {
         const today = new Date().toISOString().split('T')[0];
         if (!eventDateInput.value) eventDateInput.value = today;
@@ -245,7 +229,6 @@
         if (!returnDateInput.value) returnDateInput.value = today;
     }
 
-    // 載入/儲存活動資訊 (LocalStorage)
     function loadEventInfo() {
         eventNameInput.value = localStorage.getItem("event_name") || "";
         eventLocationInput.value = localStorage.getItem("event_location") || "";
@@ -272,7 +255,6 @@
         localStorage.setItem("registrar_name", registrarNameInput.value);
     }
 
-    // 簽名板初始化
     function initSignaturePads() {
         const extractorCanvas = document.getElementById("signatureCanvas");
         extractorCanvas.width = extractorCanvas.clientWidth || 600;
@@ -284,7 +266,6 @@
             minWidth: 1,
             maxWidth: 3
         });
-        
         const registrarCanvas = document.getElementById("registrarCanvas");
         registrarCanvas.width = registrarCanvas.clientWidth || 600;
         registrarCanvas.height = registrarCanvas.clientHeight || 150;
@@ -295,46 +276,23 @@
             minWidth: 1,
             maxWidth: 3
         });
-        
-        // 載入儲存的簽名
         const savedExtractorSig = localStorage.getItem("signature_data");
         if (savedExtractorSig) signaturePad.fromDataURL(savedExtractorSig);
-        
         const savedRegistrarSig = localStorage.getItem("registrar_signature_data");
         if (savedRegistrarSig) registrarSignaturePad.fromDataURL(savedRegistrarSig);
     }
 
     function saveSignatures() {
-        if (signaturePad && !signaturePad.isEmpty()) {
-            localStorage.setItem("signature_data", signaturePad.toDataURL());
-        } else {
-            localStorage.removeItem("signature_data");
-        }
-        if (registrarSignaturePad && !registrarSignaturePad.isEmpty()) {
-            localStorage.setItem("registrar_signature_data", registrarSignaturePad.toDataURL());
-        } else {
-            localStorage.removeItem("registrar_signature_data");
-        }
+        if (signaturePad && !signaturePad.isEmpty()) localStorage.setItem("signature_data", signaturePad.toDataURL());
+        else localStorage.removeItem("signature_data");
+        if (registrarSignaturePad && !registrarSignaturePad.isEmpty()) localStorage.setItem("registrar_signature_data", registrarSignaturePad.toDataURL());
+        else localStorage.removeItem("registrar_signature_data");
     }
 
-    function clearSignature() {
-        if (signaturePad) signaturePad.clear();
-        localStorage.removeItem("signature_data");
-    }
-    
-    function clearRegistrarSignature() {
-        if (registrarSignaturePad) registrarSignaturePad.clear();
-        localStorage.removeItem("registrar_signature_data");
-    }
+    function clearSignature() { if (signaturePad) signaturePad.clear(); localStorage.removeItem("signature_data"); }
+    function clearRegistrarSignature() { if (registrarSignaturePad) registrarSignaturePad.clear(); localStorage.removeItem("registrar_signature_data"); }
 
-    // 確認按鈕：只儲存資料，唔匯出
-    function confirmSave() {
-        saveEventInfo();
-        saveSignatures();
-        showToast("✅ 所有資料已儲存到手機");
-    }
-
-    // 生成報告 HTML
+    // 生成與列印格式完全相同的報告 HTML
     function generateReportHTML() {
         const eventName = eventNameInput.value || "_____________";
         const eventLocation = eventLocationInput.value || "_____________";
@@ -350,40 +308,32 @@
         const registrarSigData = (registrarSignaturePad && !registrarSignaturePad.isEmpty()) ? registrarSignaturePad.toDataURL() : "";
         
         let itemsHtml = "";
-        if (todayItems.length === 0) {
-            itemsHtml = "<tr><td colspan='3' style='text-align:center;'>（無領取記錄）</td></tr>";
-        } else {
-            todayItems.forEach((item, idx) => {
-                itemsHtml += `<tr><td>${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td></tr>`;
-            });
-        }
+        if (todayItems.length === 0) itemsHtml = "<tr><td colspan='3' style='text-align:center;'>（無領取記錄）</td></tr>";
+        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td>${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td></tr>`; });
         
         return `<!DOCTYPE html>
         <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>物品領取簽名單</title>
-            <style>
-                body { font-family: system-ui, 'Noto Sans TC', sans-serif; margin: 0; padding: 20px; }
-                .report-container { max-width: 800px; margin: 0 auto; }
-                h1 { text-align: center; font-size: 24px; margin-bottom: 20px; }
-                .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                .info-table td { padding: 8px; border: 1px solid #aaa; }
-                .info-table td:first-child { width: 30%; background: #f5f5f5; }
-                .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                .item-table th, .item-table td { border: 1px solid #aaa; padding: 8px; text-align: left; }
-                .item-table th { background: #f5f5f5; }
-                .sign-area { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 30px; justify-content: space-between; }
-                .sign-box { width: 45%; }
-                .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
-                .sign-line img { max-height: 80px; }
-                .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
-            </style>
+        <head><meta charset="UTF-8"><title>物品領取簽名單</title>
+        <style>
+            body { font-family: system-ui, 'Noto Sans TC', sans-serif; margin: 0; padding: 20px; }
+            .report-container { max-width: 800px; margin: 0 auto; }
+            h1 { text-align: center; font-size: 24px; margin-bottom: 20px; }
+            .info-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            .info-table td { padding: 8px; border: 1px solid #aaa; }
+            .info-table td:first-child { width: 30%; background: #f5f5f5; }
+            .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            .item-table th, .item-table td { border: 1px solid #aaa; padding: 8px; text-align: left; }
+            .item-table th { background: #f5f5f5; }
+            .sign-area { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 30px; justify-content: space-between; }
+            .sign-box { width: 45%; }
+            .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
+            .sign-line img { max-height: 80px; }
+            .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #999; }
+        </style>
         </head>
         <body>
         <div class="report-container">
             <h1>📋 物品領取簽名單</h1>
-            
             <table class="info-table">
                 <tr><td><strong>節目名稱</strong></td><td>${escapeHtml(eventName)}</td></tr>
                 <tr><td><strong>地點</strong></td><td>${escapeHtml(eventLocation)}</td></tr>
@@ -396,22 +346,11 @@
                 <tr><td><strong>歸還日期</strong></td><td>${escapeHtml(returnDate)}</td></tr>
                 <tr><td><strong>登記人姓名</strong></td><td>${escapeHtml(registrarName)}</td></tr>
             </table>
-            
             <h3>📦 領取物品清單 (共 ${todayItems.length} 件)</h3>
-            <table class="item-table">
-                <thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th></tr></thead>
-                <tbody>${itemsHtml}</tbody>
-            </table>
-            
+            <table class="item-table"><thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th></tr></thead><tbody>${itemsHtml}</tbody></table>
             <div class="sign-area">
-                <div class="sign-box">
-                    <h3>✍️ 提取人簽名</h3>
-                    <div class="sign-line">${extractorSigData ? `<img src="${extractorSigData}" alt="提取人簽名">` : ""}</div>
-                </div>
-                <div class="sign-box">
-                    <h3>✍️ 登記人簽名</h3>
-                    <div class="sign-line">${registrarSigData ? `<img src="${registrarSigData}" alt="登記人簽名">` : ""}</div>
-                </div>
+                <div class="sign-box"><h3>✍️ 提取人簽名</h3><div class="sign-line">${extractorSigData ? `<img src="${extractorSigData}" alt="提取人簽名">` : ""}</div></div>
+                <div class="sign-box"><h3>✍️ 登記人簽名</h3><div class="sign-line">${registrarSigData ? `<img src="${registrarSigData}" alt="登記人簽名">` : ""}</div></div>
             </div>
             <div class="footer">此文件為正式領取憑證，請妥善保存</div>
         </div>
@@ -419,18 +358,10 @@
         </html>`;
     }
     
-    function escapeHtml(str) {
-        if (!str) return "";
-        return str.replace(/[&<>]/g, function(m) {
-            if (m === '&') return '&amp;';
-            if (m === '<') return '&lt;';
-            if (m === '>') return '&gt;';
-            return m;
-        });
-    }
+    function escapeHtml(str) { if (!str) return ""; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
 
-    // 儲存為 PDF
-    async function saveAsPDF() {
+    // 核心功能：下載 PDF (與列印格式相同)
+    async function downloadPDF() {
         const reportHtml = generateReportHTML();
         const printWindow = window.open('', '_blank');
         printWindow.document.write(reportHtml);
@@ -447,12 +378,16 @@
         try {
             await html2pdf().set(opt).from(element).save();
             showToast(`✅ PDF 已儲存到手機下載資料夾`);
-        } catch (err) {
-            console.error("PDF 生成失敗:", err);
-            showToast(`❌ PDF 生成失敗: ${err.message}`, true);
-        } finally {
-            printWindow.close();
-        }
+        } catch (err) { showToast(`❌ PDF 生成失敗: ${err.message}`, true); }
+        finally { printWindow.close(); }
+    }
+
+    // 確認儲存：儲存資料 + 自動下載 PDF
+    async function confirmAndSave() {
+        saveEventInfo();
+        saveSignatures();
+        showToast("✅ 資料已儲存，正在產生PDF...");
+        await downloadPDF();
     }
 
     function printSignatureSheet() {
@@ -463,35 +398,22 @@
         printWindow.print();
     }
 
-    // 物品庫顯示/隱藏
+    // 物品庫顯示/隱藏邏輯
     let isLibraryVisible = true;
     function toggleLibraryVisibility() {
         isLibraryVisible = !isLibraryVisible;
-        if (isLibraryVisible) {
-            librarySection.classList.remove("hidden-section");
-            toggleLibraryBtn.innerHTML = "🙈 隱藏";
-            toggleLibraryBtn.style.background = "#34c759";
-        } else {
-            librarySection.classList.add("hidden-section");
-            toggleLibraryBtn.innerHTML = "🐵 顯示物品庫";
-            toggleLibraryBtn.style.background = "#007aff";
-        }
+        librarySection.classList.toggle("hidden-section", !isLibraryVisible);
+        toggleLibraryBtn.innerHTML = isLibraryVisible ? "🙈 隱藏" : "🐵 顯示物品庫";
+        toggleLibraryBtn.style.background = isLibraryVisible ? "#34c759" : "#007aff";
         localStorage.setItem("library_visible", isLibraryVisible);
     }
-
     function loadLibraryVisibility() {
         const saved = localStorage.getItem("library_visible");
         if (saved !== null) isLibraryVisible = saved === "true";
         else isLibraryVisible = true;
-        if (isLibraryVisible) {
-            librarySection.classList.remove("hidden-section");
-            toggleLibraryBtn.innerHTML = "🙈 隱藏";
-            toggleLibraryBtn.style.background = "#34c759";
-        } else {
-            librarySection.classList.add("hidden-section");
-            toggleLibraryBtn.innerHTML = "🐵 顯示物品庫";
-            toggleLibraryBtn.style.background = "#007aff";
-        }
+        librarySection.classList.toggle("hidden-section", !isLibraryVisible);
+        toggleLibraryBtn.innerHTML = isLibraryVisible ? "🙈 隱藏" : "🐵 顯示物品庫";
+        toggleLibraryBtn.style.background = isLibraryVisible ? "#34c759" : "#007aff";
     }
 
     // 載入 CSV 物品庫
@@ -512,30 +434,19 @@
                 if (parts.length < 2) continue;
                 let barcode = parts[0].replace(/^"|"$/g, '').trim();
                 let name = parts[1].replace(/^"|"$/g, '').trim();
-                if (barcode && name) {
-                    newLibrary[barcode] = name;
-                    count++;
-                }
+                if (barcode && name) newLibrary[barcode] = name, count++;
             }
             library = newLibrary;
             syncStatusDiv.innerHTML = `✅ 已從 GitHub 載入 ${count} 件物品`;
             renderLibraryTable();
-        } catch (error) {
-            syncStatusDiv.innerHTML = "⚠️ 無法載入 items.csv，請確認檔案存在";
-            library = {};
-            renderLibraryTable();
-        }
+        } catch (error) { syncStatusDiv.innerHTML = "⚠️ 無法載入 items.csv"; library = {}; renderLibraryTable(); }
     }
 
     function getFilteredLibraryArray() {
         let items = Object.entries(library).map(([barcode, name]) => ({ barcode, name }));
-        if (currentSearchTerm.trim() !== "") {
-            const term = currentSearchTerm.trim().toLowerCase();
-            items = items.filter(item => item.barcode.toLowerCase().includes(term) || item.name.toLowerCase().includes(term));
-        }
+        if (currentSearchTerm.trim()) { const term = currentSearchTerm.trim().toLowerCase(); items = items.filter(item => item.barcode.toLowerCase().includes(term) || item.name.toLowerCase().includes(term)); }
         return items;
     }
-
     function renderLibraryTable() {
         const filtered = getFilteredLibraryArray();
         totalCountBadge.innerText = filtered.length;
@@ -557,97 +468,29 @@
         }
         renderPagination(totalPages);
     }
-
     function renderPagination(totalPages) {
         paginationDiv.innerHTML = "";
         if (totalPages <= 1) return;
-        const prevBtn = document.createElement("button");
-        prevBtn.innerText = "◀ 上一頁";
-        prevBtn.className = "page-btn";
-        prevBtn.disabled = (currentPage === 1);
-        prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderLibraryTable(); } };
-        paginationDiv.appendChild(prevBtn);
-        let startPage = Math.max(1, currentPage - 2);
-        let endPage = Math.min(totalPages, startPage + 4);
-        for (let i = startPage; i <= endPage; i++) {
-            const pageBtn = document.createElement("button");
-            pageBtn.innerText = i;
-            pageBtn.className = "page-btn";
-            if (i === currentPage) pageBtn.classList.add("active");
-            pageBtn.onclick = () => { currentPage = i; renderLibraryTable(); };
-            paginationDiv.appendChild(pageBtn);
-        }
-        const nextBtn = document.createElement("button");
-        nextBtn.innerText = "下一頁 ▶";
-        nextBtn.className = "page-btn";
-        nextBtn.disabled = (currentPage === totalPages);
-        nextBtn.onclick = () => { if (currentPage < totalPages) { currentPage++; renderLibraryTable(); } };
-        paginationDiv.appendChild(nextBtn);
+        const prevBtn = document.createElement("button"); prevBtn.innerText = "◀ 上一頁"; prevBtn.className = "page-btn"; prevBtn.disabled = (currentPage === 1); prevBtn.onclick = () => { if (currentPage > 1) { currentPage--; renderLibraryTable(); } }; paginationDiv.appendChild(prevBtn);
+        let startPage = Math.max(1, currentPage - 2); let endPage = Math.min(totalPages, startPage + 4);
+        for (let i = startPage; i <= endPage; i++) { const pageBtn = document.createElement("button"); pageBtn.innerText = i; pageBtn.className = "page-btn"; if (i === currentPage) pageBtn.classList.add("active"); pageBtn.onclick = () => { currentPage = i; renderLibraryTable(); }; paginationDiv.appendChild(pageBtn); }
+        const nextBtn = document.createElement("button"); nextBtn.innerText = "下一頁 ▶"; nextBtn.className = "page-btn"; nextBtn.disabled = (currentPage === totalPages); nextBtn.onclick = () => { if (currentPage < totalPages) { currentPage++; renderLibraryTable(); } }; paginationDiv.appendChild(nextBtn);
     }
-
-    function updateMaxDisplay() {
-        countDisplay.innerText = `${todayItems.length} / ${MAX_ITEMS}`;
-        if (todayItems.length >= MAX_ITEMS) {
-            progressMsg.innerText = `已達每日上限 ${MAX_ITEMS} 件，請清空或明天再掃描`;
-        } else {
-            progressMsg.innerText = `已領取 ${todayItems.length} 件，尚可領取 ${MAX_ITEMS - todayItems.length} 件`;
-        }
-    }
-
+    function updateMaxDisplay() { countDisplay.innerText = `${todayItems.length} / ${MAX_ITEMS}`; progressMsg.innerText = todayItems.length >= MAX_ITEMS ? `已達每日上限 ${MAX_ITEMS} 件` : `已領取 ${todayItems.length} 件，尚可領取 ${MAX_ITEMS - todayItems.length} 件`; }
     function saveToday() { localStorage.setItem("today_items", JSON.stringify(todayItems)); renderTodayList(); }
+    function loadData() { const storedToday = localStorage.getItem("today_items"); todayItems = storedToday ? JSON.parse(storedToday) : []; renderTodayList(); loadLibraryFromCSV(); loadEventInfo(); setDefaultDates(); }
+    function renderTodayList() { todayListBody.innerHTML = ""; updateMaxDisplay(); todayItems.forEach((item, idx) => { const row = todayListBody.insertRow(); row.insertCell(0).innerText = idx+1; row.insertCell(1).innerText = item.barcode; row.insertCell(2).innerText = item.name; const delCell = row.insertCell(3); const delBtn = document.createElement("button"); delBtn.innerText = "❌"; delBtn.className = "delete-btn"; delBtn.onclick = () => { todayItems.splice(idx, 1); saveToday(); }; delCell.appendChild(delBtn); }); }
 
-    function loadData() {
-        const storedToday = localStorage.getItem("today_items");
-        todayItems = storedToday ? JSON.parse(storedToday) : [];
-        renderTodayList();
-        loadLibraryFromCSV();
-        loadEventInfo();
-        setDefaultDates();
-    }
-
-    function renderTodayList() {
-        todayListBody.innerHTML = "";
-        updateMaxDisplay();
-        todayItems.forEach((item, idx) => {
-            const row = todayListBody.insertRow();
-            row.insertCell(0).innerText = idx+1;
-            row.insertCell(1).innerText = item.barcode;
-            row.insertCell(2).innerText = item.name;
-            const delCell = row.insertCell(3);
-            const delBtn = document.createElement("button");
-            delBtn.innerText = "❌";
-            delBtn.className = "delete-btn";
-            delBtn.onclick = () => { todayItems.splice(idx, 1); saveToday(); };
-            delCell.appendChild(delBtn);
-        });
-    }
-
-    // 掃描成功處理
+    // 掃描邏輯
     async function onScanSuccess(decodedText) {
         if (!scannerStarted) return;
         const now = Date.now();
         if (now - lastScanTime < SCAN_COOLDOWN_MS) return;
-        if (todayItems.length >= MAX_ITEMS) { 
-            alert(`已達每日上限 ${MAX_ITEMS} 件`); 
-            return; 
-        }
+        if (todayItems.length >= MAX_ITEMS) { alert(`已達每日上限 ${MAX_ITEMS} 件`); return; }
         const barcode = decodedText.trim();
-        if (todayItems.find(item => item.barcode === barcode)) { 
-            alert(`物品今日已經掃描過，不可重複領取`); 
-            return; 
-        }
+        if (todayItems.find(item => item.barcode === barcode)) { alert(`物品今日已經掃描過，不可重複領取`); return; }
         let itemName = library[barcode];
-        if (!itemName) {
-            let newName = prompt(`未找到物品「${barcode}」，請輸入物品名稱：`, "未知物品");
-            if (newName && newName.trim() !== "") { 
-                itemName = newName.trim(); 
-                library[barcode] = itemName; 
-                renderLibraryTable(); 
-            } else {
-                alert("沒有輸入名稱，跳過"); 
-                return;
-            }
-        }
+        if (!itemName) { let newName = prompt(`未找到物品「${barcode}」，請輸入物品名稱：`, "未知物品"); if (newName && newName.trim() !== "") { itemName = newName.trim(); library[barcode] = itemName; renderLibraryTable(); } else { alert("沒有輸入名稱，跳過"); return; } }
         lastScanTime = now;
         todayItems.push({ barcode, name: itemName, timestamp: new Date().toISOString() });
         saveToday();
@@ -657,44 +500,25 @@
         statusP.innerText = `✅ 已記錄: ${itemName}`;
         setTimeout(() => { if (scannerStarted) statusP.innerText = originalText; }, 1500);
     }
-
-    function startScanner() {
-        if (scannerStarted) return;
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 300, height: 300 } }, onScanSuccess, (errMsg) => {})
-            .then(() => { scannerStarted = true; document.getElementById("scanStatus").innerText = "📸 相機已開啟 (冷卻3秒)"; })
-            .catch(err => { alert("無法開啟相機，請確認已授予相機權限"); });
-    }
-
-    function stopScanner() {
-        if (html5QrCode && scannerStarted) { html5QrCode.stop().then(() => { scannerStarted = false; document.getElementById("scanStatus").innerText = "⏹️ 相機已停止"; }).catch(()=>{}); }
-    }
+    function startScanner() { if (scannerStarted) return; html5QrCode = new Html5Qrcode("reader"); html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 300, height: 300 } }, onScanSuccess, (errMsg) => {}).then(() => { scannerStarted = true; document.getElementById("scanStatus").innerText = "📸 相機已開啟 (冷卻3秒)"; }).catch(err => { alert("無法開啟相機，請確認已授予相機權限"); }); }
+    function stopScanner() { if (html5QrCode && scannerStarted) { html5QrCode.stop().then(() => { scannerStarted = false; document.getElementById("scanStatus").innerText = "⏹️ 相機已停止"; }).catch(()=>{}); } }
 
     // 事件綁定
     document.getElementById("startScannerBtn").onclick = startScanner;
     document.getElementById("stopScannerBtn").onclick = stopScanner;
-    document.getElementById("savePdfBtn").onclick = saveAsPDF;
+    document.getElementById("savePdfBtn").onclick = downloadPDF;
     document.getElementById("printBtn").onclick = printSignatureSheet;
     document.getElementById("clearTodayBtn").onclick = () => { if (confirm("清空今日所有記錄？")) { todayItems = []; saveToday(); } };
-    document.getElementById("clearSignatureBtn").onclick = () => { clearSignature(); };
-    document.getElementById("clearRegistrarSignatureBtn").onclick = () => { clearRegistrarSignature(); };
-    document.getElementById("confirmBtn").onclick = confirmSave;
+    document.getElementById("clearSignatureBtn").onclick = clearSignature;
+    document.getElementById("clearRegistrarSignatureBtn").onclick = clearRegistrarSignature;
+    document.getElementById("confirmBtn").onclick = confirmAndSave;
     toggleLibraryBtn.onclick = toggleLibraryVisibility;
     searchInput.oninput = (e) => { currentSearchTerm = e.target.value; currentPage = 1; renderLibraryTable(); };
-    
-    // 自動儲存活動資訊
-    eventNameInput.onchange = saveEventInfo;
-    eventLocationInput.onchange = saveEventInfo;
-    eventDateInput.onchange = saveEventInfo;
-    extractorNameInput.onchange = saveEventInfo;
-    extractorDepartmentInput.onchange = saveEventInfo;
-    extractorPositionInput.onchange = saveEventInfo;
-    extractorPhoneInput.onchange = saveEventInfo;
-    extractDateInput.onchange = saveEventInfo;
-    returnDateInput.onchange = saveEventInfo;
-    registrarNameInput.onchange = saveEventInfo;
+    eventNameInput.onchange = saveEventInfo; eventLocationInput.onchange = saveEventInfo; eventDateInput.onchange = saveEventInfo;
+    extractorNameInput.onchange = saveEventInfo; extractorDepartmentInput.onchange = saveEventInfo; extractorPositionInput.onchange = saveEventInfo;
+    extractorPhoneInput.onchange = saveEventInfo; extractDateInput.onchange = saveEventInfo; returnDateInput.onchange = saveEventInfo; registrarNameInput.onchange = saveEventInfo;
 
-    // 初始化
+    // 啟動
     loadData();
     loadLibraryVisibility();
     initSignaturePads();
