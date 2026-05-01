@@ -169,8 +169,8 @@
 
     <!-- 確認按鈕 -->
     <div class="card confirm-section no-print">
-        <button id="confirmBtn" class="confirm-btn">✅ 確認儲存</button>
-        <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會自動儲存所有資料</p>
+        <button id="confirmBtn" class="confirm-btn">✅ 確認儲存並匯出CSV</button>
+        <p style="font-size: 0.8rem; color: #666; margin-top: 8px;">按確認後會自動儲存所有資料，並匯出完整報告到手機下載資料夾</p>
     </div>
 </div>
 
@@ -213,9 +213,10 @@
     const registrarNameInput = document.getElementById("registrarName");
 
     // 顯示提示訊息
-    function showToast(message) {
+    function showToast(message, isError = false) {
         const toast = document.createElement("div");
         toast.className = "toast-msg";
+        if (isError) toast.style.background = "#ff3b30";
         toast.innerText = message;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
@@ -229,7 +230,7 @@
         if (!returnDateInput.value) returnDateInput.value = today;
     }
 
-    // 載入/儲存活動資訊
+    // 載入/儲存活動資訊 (LocalStorage)
     function loadEventInfo() {
         eventNameInput.value = localStorage.getItem("event_name") || "";
         eventLocationInput.value = localStorage.getItem("event_location") || "";
@@ -253,8 +254,8 @@
     // 簽名板初始化
     function initSignaturePads() {
         const extractorCanvas = document.getElementById("signatureCanvas");
-        extractorCanvas.width = extractorCanvas.clientWidth;
-        extractorCanvas.height = extractorCanvas.clientHeight;
+        extractorCanvas.width = extractorCanvas.clientWidth || 600;
+        extractorCanvas.height = extractorCanvas.clientHeight || 150;
         signaturePad = new SignaturePad(extractorCanvas, {
             backgroundColor: 'white',
             penColor: 'black',
@@ -264,8 +265,8 @@
         });
         
         const registrarCanvas = document.getElementById("registrarCanvas");
-        registrarCanvas.width = registrarCanvas.clientWidth;
-        registrarCanvas.height = registrarCanvas.clientHeight;
+        registrarCanvas.width = registrarCanvas.clientWidth || 600;
+        registrarCanvas.height = registrarCanvas.clientHeight || 150;
         registrarSignaturePad = new SignaturePad(registrarCanvas, {
             backgroundColor: 'white',
             penColor: 'black',
@@ -305,11 +306,62 @@
         localStorage.removeItem("registrar_signature_data");
     }
 
-    // 確認按鈕：儲存所有資料
-    function confirmAndSave() {
+    // 匯出完整 CSV 到下載資料夾
+    function exportFullReportToCSV() {
+        const eventName = eventNameInput.value || "未填寫";
+        const eventLocation = eventLocationInput.value || "未填寫";
+        const eventDate = eventDateInput.value || "未填寫";
+        const extractorName = extractorNameInput.value || "未填寫";
+        const extractDate = extractDateInput.value || "未填寫";
+        const returnDate = returnDateInput.value || "未填寫";
+        const registrarName = registrarNameInput.value || "未填寫";
+        
+        let csvContent = "\uFEFF"; // BOM for UTF-8
+        csvContent += "=== 活動資訊 ===\n";
+        csvContent += `節目名稱,${eventName}\n`;
+        csvContent += `地點,${eventLocation}\n`;
+        csvContent += `使用日期,${eventDate}\n`;
+        csvContent += `提取人,${extractorName}\n`;
+        csvContent += `提取日期,${extractDate}\n`;
+        csvContent += `歸還日期,${returnDate}\n`;
+        csvContent += `登記人,${registrarName}\n\n`;
+        csvContent += "=== 領取物品清單 ===\n";
+        csvContent += "序號,Barcode,物品名稱,領取時間\n";
+        
+        if (todayItems.length === 0) {
+            csvContent += "（無領取記錄）\n";
+        } else {
+            todayItems.forEach((item, idx) => {
+                csvContent += `${idx+1},"${item.barcode}","${item.name}","${new Date(item.timestamp).toLocaleString()}"\n`;
+            });
+        }
+        
+        // 建立下載
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        // 檔名格式：領取報告_使用日期_提取人.csv
+        const fileName = `領取報告_${eventDate}_${extractorName}.csv`;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        return fileName;
+    }
+
+    // 確認按鈕：儲存所有資料 + 匯出 CSV
+    function confirmAndExport() {
+        // 先儲存所有資料到 LocalStorage
         saveEventInfo();
         saveSignatures();
-        showToast("✅ 所有資料已自動儲存！");
+        
+        // 匯出 CSV 到下載資料夾
+        const fileName = exportFullReportToCSV();
+        
+        showToast(`✅ 已儲存並匯出 ${fileName}`);
     }
 
     // 物品庫顯示/隱藏
@@ -343,7 +395,7 @@
         }
     }
 
-    // 載入 CSV
+    // 載入 CSV 物品庫
     async function loadLibraryFromCSV() {
         syncStatusDiv.innerHTML = "🔄 正在從 GitHub 載入物品庫...";
         try {
@@ -510,39 +562,13 @@
         if (html5QrCode && scannerStarted) { html5QrCode.stop().then(() => { scannerStarted = false; document.getElementById("scanStatus").innerText = "⏹️ 相機已停止"; }).catch(()=>{}); }
     }
 
-    // 匯出 CSV（包含所有資料）
-    function exportFullReport() {
-        const eventName = eventNameInput.value || "未填寫";
-        const eventLocation = eventLocationInput.value || "未填寫";
-        const eventDate = eventDateInput.value || "未填寫";
-        const extractorName = extractorNameInput.value || "未填寫";
-        const extractDate = extractDateInput.value || "未填寫";
-        const returnDate = returnDateInput.value || "未填寫";
-        const registrarName = registrarNameInput.value || "未填寫";
-        
-        let csvContent = "=== 活動資訊 ===\n";
-        csvContent += `節目名稱,${eventName}\n`;
-        csvContent += `地點,${eventLocation}\n`;
-        csvContent += `使用日期,${eventDate}\n`;
-        csvContent += `提取人,${extractorName}\n`;
-        csvContent += `提取日期,${extractDate}\n`;
-        csvContent += `歸還日期,${returnDate}\n`;
-        csvContent += `登記人,${registrarName}\n\n`;
-        csvContent += "=== 領取物品清單 ===\n";
-        csvContent += "序號,Barcode,物品名稱,領取時間\n";
-        todayItems.forEach((item, idx) => {
-            csvContent += `${idx+1},"${item.barcode}","${item.name}","${new Date(item.timestamp).toLocaleString()}"\n`;
-        });
-        
-        const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `領取報告_${eventDate}_${extractorName}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
+    // 手動匯出 CSV（保留原有按鈕）
+    function manualExportCSV() {
+        const fileName = exportFullReportToCSV();
+        showToast(`📁 已匯出 ${fileName}`);
     }
 
-    // 列印簽名單（完整版）
+    // 列印簽名單
     function printSignatureSheet() {
         const eventName = eventNameInput.value || "_____________";
         const eventLocation = eventLocationInput.value || "_____________";
@@ -564,7 +590,6 @@
             .sign-line { border-bottom: 1px solid #000; min-height: 80px; margin-top: 10px; }
             .item-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
             .item-table th, .item-table td { border: 1px solid #aaa; padding: 8px; text-align: left; }
-            @media print { .no-break { page-break-inside: avoid; } }
         </style></head><body>
         <h1>物品領取簽名單</h1>
         <table class="info-table">
@@ -627,14 +652,14 @@
     // 事件綁定
     document.getElementById("startScannerBtn").onclick = startScanner;
     document.getElementById("stopScannerBtn").onclick = stopScanner;
-    document.getElementById("saveCsvBtn").onclick = exportFullReport;
+    document.getElementById("saveCsvBtn").onclick = manualExportCSV;
     document.getElementById("printBtn").onclick = printSignatureSheet;
     document.getElementById("clearTodayBtn").onclick = () => { if (confirm("清空今日所有記錄？")) { todayItems = []; saveToday(); } };
     document.getElementById("setMaxBtn").onclick = setMaxItems;
     document.getElementById("setCooldownBtn").onclick = setCooldown;
     document.getElementById("clearSignatureBtn").onclick = () => { clearSignature(); };
     document.getElementById("clearRegistrarSignatureBtn").onclick = () => { clearRegistrarSignature(); };
-    document.getElementById("confirmBtn").onclick = confirmAndSave;
+    document.getElementById("confirmBtn").onclick = confirmAndExport;
     toggleLibraryBtn.onclick = toggleLibraryVisibility;
     searchInput.oninput = (e) => { currentSearchTerm = e.target.value; currentPage = 1; renderLibraryTable(); };
     
