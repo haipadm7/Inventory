@@ -29,10 +29,6 @@
         #reader { width: 100%; max-width: 500px; margin: 0 auto; position: relative; }
         .scanner-area { text-align: center; position: relative; }
         /* 掃描器對準線 - 更幼 1px */
-        .scanner-overlay {
-            position: relative;
-            display: inline-block;
-        }
         .scan-line {
             position: absolute;
             top: 50%;
@@ -155,14 +151,14 @@
 <script>
     // --- 固定參數 ---
     const MAX_ITEMS = 60;
-    const SCAN_COOLDOWN_MS = 1000; // 掃描成功後冷卻1秒（畫面不會關閉）
+    const SCAN_COOLDOWN_MS = 1000; // 掃描成功後冷卻1秒
     const FREEZE_DURATION = 1000;
 
     // --- 全域變數 ---
     let library = {};
     let todayItems = [];
     let lastScanTime = 0;
-    let isInCooldown = false;   // 冷卻標記（不處理掃描）
+    let isInCooldown = false;
     let currentPage = 1;
     const PAGE_SIZE = 50;
     let currentSearchTerm = "";
@@ -196,7 +192,6 @@
     const returnDateInput = document.getElementById("returnDate");
     const registrarNameInput = document.getElementById("registrarName");
 
-    // 對準線控制
     function showScanLine() { if (scanLine) scanLine.style.display = "block"; }
     function hideScanLine() { if (scanLine) scanLine.style.display = "none"; }
 
@@ -279,41 +274,29 @@
     function clearSignature() { if (signaturePad) signaturePad.clear(); localStorage.removeItem("signature_data"); }
     function clearRegistrarSignature() { if (registrarSignaturePad) registrarSignaturePad.clear(); localStorage.removeItem("registrar_signature_data"); }
 
-    // 掃描成功後冷卻1秒（相機繼續運作，但不處理新掃描）
     async function startCooldown() {
         isInCooldown = true;
         const statusP = document.getElementById("scanStatus");
         const originalText = statusP.innerText;
         statusP.innerText = "⏸️ 掃描成功，請稍候 1 秒...";
-        
         await new Promise(resolve => setTimeout(resolve, FREEZE_DURATION));
-        
         isInCooldown = false;
-        if (scannerStarted) {
-            statusP.innerText = originalText;
-        }
+        if (scannerStarted) statusP.innerText = originalText;
     }
 
-    // 掃描成功處理
     async function onScanSuccess(decodedText) {
-        // 如果相機未啟動、或在冷卻中，不處理掃描
         if (!scannerStarted || isInCooldown) return;
-        
-        // 冷卻時間檢查（防止短時間內連續掃描同一條碼）
         const now = Date.now();
         if (now - lastScanTime < SCAN_COOLDOWN_MS) return;
-        
         if (todayItems.length >= MAX_ITEMS) { 
             alert(`已達每日上限 ${MAX_ITEMS} 件`); 
             return; 
         }
-        
         const barcode = decodedText.trim();
         if (todayItems.find(item => item.barcode === barcode)) { 
             alert(`物品今日已經掃描過，不可重複領取`); 
             return; 
         }
-        
         let itemName = library[barcode];
         if (!itemName) { 
             let newName = prompt(`未找到物品「${barcode}」，請輸入物品名稱：`, "未知物品"); 
@@ -326,41 +309,42 @@
                 return;
             }
         }
-        
-        // 記錄掃描時間
         lastScanTime = now;
-        
-        // 加入今日清單
         todayItems.push({ barcode, name: itemName, timestamp: new Date().toISOString() });
         saveToday();
-        
-        // 震動回饋
         if (navigator.vibrate) navigator.vibrate(200);
-        
-        // 顯示成功訊息
         const statusP = document.getElementById("scanStatus");
         const originalText = statusP.innerText;
         statusP.innerText = `✅ 已記錄: ${itemName}`;
         setTimeout(() => { 
             if (scannerStarted && !isInCooldown) statusP.innerText = originalText; 
         }, 1500);
-        
-        // 啟動冷卻（1秒內不處理掃描，但相機繼續運作）
         await startCooldown();
     }
 
     function startScanner() {
         if (scannerStarted) return;
         html5QrCode = new Html5Qrcode("reader");
+        // 改良的掃描設定，支援自動對焦
+        const config = { 
+            fps: 15, 
+            qrbox: { width: 300, height: 300 },
+            aspectRatio: 1.0,
+            videoConstraints: {
+                facingMode: "environment",
+                focusMode: "continuous",  // 連續自動對焦模式
+                resizeMode: "crop-and-scale"
+            }
+        };
         html5QrCode.start(
             { facingMode: "environment" }, 
-            { fps: 15, qrbox: { width: 300, height: 300 } }, 
+            config, 
             onScanSuccess, 
             (errMsg) => {}
         ).then(() => { 
             scannerStarted = true; 
             isInCooldown = false;
-            document.getElementById("scanStatus").innerText = "📸 相機已開啟，對準黃線掃描";
+            document.getElementById("scanStatus").innerHTML = "📸 相機已開啟 (自動對焦)<br>💡 點擊畫面可手動對焦";
             showScanLine();
         }).catch(err => { 
             alert("無法開啟相機，請確認已授予相機權限"); 
