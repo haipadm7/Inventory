@@ -151,8 +151,8 @@
 <script>
     // --- 固定參數 ---
     const MAX_ITEMS = 60;
-    const SCAN_COOLDOWN_MS = 1000;
-    const FREEZE_DURATION = 1000;
+    const SCAN_COOLDOWN_MS = 2000; // 掃描成功後冷卻改為2秒
+    const FREEZE_DURATION = 2000;   // 凍結時間改為2秒
 
     // --- 全域變數 ---
     let library = {};
@@ -278,7 +278,7 @@
         isInCooldown = true;
         const statusP = document.getElementById("scanStatus");
         const originalText = statusP.innerText;
-        statusP.innerText = "⏸️ 掃描成功，請稍候 1 秒...";
+        statusP.innerText = "⏸️ 掃描成功，請稍候 2 秒...";
         await new Promise(resolve => setTimeout(resolve, FREEZE_DURATION));
         isInCooldown = false;
         if (scannerStarted) statusP.innerText = originalText;
@@ -325,11 +325,16 @@
     function startScanner() {
         if (scannerStarted) return;
         html5QrCode = new Html5Qrcode("reader");
-        // 簡化的掃描設定，提高穩定性
+        // 提高解析度設定，改善對焦
         const config = { 
             fps: 15, 
-            qrbox: { width: 280, height: 280 },
-            aspectRatio: 1.0
+            qrbox: { width: 300, height: 300 },
+            aspectRatio: 1.0,
+            videoConstraints: {
+                facingMode: "environment",
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }
         };
         html5QrCode.start(
             { facingMode: "environment" }, 
@@ -339,8 +344,38 @@
         ).then(() => { 
             scannerStarted = true; 
             isInCooldown = false;
-            document.getElementById("scanStatus").innerHTML = "📸 相機已開啟<br>📌 請對準黃線，手機距離條碼10-15cm";
+            document.getElementById("scanStatus").innerHTML = "📸 相機已開啟<br>📌 請對準黃線，保持10-15cm距離<br>💡 雙擊畫面可嘗試對焦";
             showScanLine();
+            
+            // 加入雙擊對焦功能（比點擊更穩定）
+            setTimeout(() => {
+                const video = document.querySelector("#reader video");
+                if (video) {
+                    video.style.cursor = "pointer";
+                    video.addEventListener("dblclick", async () => {
+                        try {
+                            // 嘗試重新取得對焦
+                            const stream = await navigator.mediaDevices.getUserMedia({
+                                video: { facingMode: "environment" }
+                            });
+                            if (html5QrCode && scannerStarted) {
+                                // 重新啟動掃描器以觸發對焦
+                                await html5QrCode.stop();
+                                await html5QrCode.start(
+                                    { facingMode: "environment" }, 
+                                    config, 
+                                    onScanSuccess, 
+                                    (errMsg) => {}
+                                );
+                                showToast("🔍 已嘗試重新對焦");
+                            }
+                        } catch (err) {
+                            console.log("重新對焦失敗:", err);
+                            showToast("⚠️ 對焦失敗，請調整距離", true);
+                        }
+                    });
+                }
+            }, 1000);
         }).catch(err => { 
             alert("無法開啟相機，請確認已授予相機權限"); 
             scannerStarted = false;
@@ -362,7 +397,7 @@
         }
     }
 
-    // 生成報告用的完整 HTML 文件（保持原有功能）
+    // 生成報告用的完整 HTML 文件
     function generateReportHTML() {
         const eventName = escapeHtml(eventNameInput.value) || "_____________";
         const eventLocation = escapeHtml(eventLocationInput.value) || "_____________";
@@ -378,7 +413,7 @@
         const registrarSigData = (registrarSignaturePad && !registrarSignaturePad.isEmpty()) ? registrarSignaturePad.toDataURL() : "";
         
         let itemsHtml = "";
-        if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td>`;
+        if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td><tr>`;
         else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td>`; });
         
         return `<!DOCTYPE html>
