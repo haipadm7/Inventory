@@ -28,7 +28,7 @@
         .progress-info { background: #e9ecef; border-radius: 20px; padding: 8px 12px; font-weight: 500; margin-bottom: 12px; }
         #reader { width: 100%; max-width: 500px; margin: 0 auto; position: relative; }
         .scanner-area { text-align: center; position: relative; }
-        /* 掃描器對準線 */
+        /* 掃描器對準線 - 1px 幼線 */
         .scan-line {
             position: absolute;
             top: 50%;
@@ -57,17 +57,6 @@
         .scan-line::after {
             right: -5px;
             border-left: none;
-        }
-        /* 對焦指示器 */
-        .focus-indicator {
-            position: absolute;
-            border: 2px solid #ffcc00;
-            border-radius: 4px;
-            box-shadow: 0 0 10px #ffcc00;
-            pointer-events: none;
-            z-index: 200;
-            transform: translate(-50%, -50%);
-            transition: all 0.2s ease;
         }
         input, .search-box, textarea, select { padding: 10px; border-radius: 12px; border: 1px solid #ccc; width: 100%; font-size: 1rem; margin: 4px 0; }
         .pagination { display: flex; justify-content: center; gap: 12px; margin-top: 16px; }
@@ -177,8 +166,6 @@
     let scannerStarted = false;
     let signaturePad = null;
     let registrarSignaturePad = null;
-    let currentVideoTrack = null;  // 用於手動對焦
-    let focusIndicator = null;     // 對焦指示器
 
     // DOM 元素
     const librarySection = document.getElementById("librarySection");
@@ -192,7 +179,6 @@
     const progressMsg = document.getElementById("progressMsg");
     const syncStatusDiv = document.getElementById("syncStatus");
     const scanLine = document.getElementById("scanLine");
-    const readerDiv = document.getElementById("reader");
 
     // 欄位
     const eventNameInput = document.getElementById("eventName");
@@ -205,90 +191,6 @@
     const extractDateInput = document.getElementById("extractDate");
     const returnDateInput = document.getElementById("returnDate");
     const registrarNameInput = document.getElementById("registrarName");
-
-    // 顯示對焦指示器
-    function showFocusIndicator(x, y) {
-        if (focusIndicator) focusIndicator.remove();
-        focusIndicator = document.createElement("div");
-        focusIndicator.className = "focus-indicator";
-        focusIndicator.style.position = "absolute";
-        focusIndicator.style.left = x + "px";
-        focusIndicator.style.top = y + "px";
-        focusIndicator.style.width = "60px";
-        focusIndicator.style.height = "60px";
-        focusIndicator.style.border = "2px solid #ffcc00";
-        focusIndicator.style.borderRadius = "4px";
-        focusIndicator.style.boxShadow = "0 0 10px #ffcc00";
-        focusIndicator.style.pointerEvents = "none";
-        focusIndicator.style.zIndex = "200";
-        focusIndicator.style.transform = "translate(-50%, -50%)";
-        document.body.appendChild(focusIndicator);
-        setTimeout(() => {
-            if (focusIndicator) focusIndicator.remove();
-        }, 500);
-    }
-
-    // 手動對焦功能
-    async function setFocus(x, y) {
-        if (!currentVideoTrack) {
-            console.log("沒有可用的影片軌道");
-            return false;
-        }
-        
-        // 顯示對焦指示器
-        showFocusIndicator(x, y);
-        
-        // 嘗試使用 VideoTrack 的對焦功能
-        try {
-            // 檢查是否支援對焦
-            const capabilities = currentVideoTrack.getCapabilities();
-            if (capabilities && capabilities.focusMode) {
-                await currentVideoTrack.applyConstraints({
-                    advanced: [{ focusMode: "continuous" }]
-                });
-                console.log("對焦已觸發");
-                return true;
-            }
-        } catch (err) {
-            console.log("無法使用進階對焦:", err);
-        }
-        
-        // 備用方法：重新獲取媒體流
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: "environment" }
-            });
-            if (currentVideoTrack) currentVideoTrack.stop();
-            currentVideoTrack = stream.getVideoTracks()[0];
-            console.log("重新取得媒體流以觸發對焦");
-            return true;
-        } catch (err) {
-            console.log("重新取得媒體流失敗:", err);
-            return false;
-        }
-    }
-
-    // 為 video 元素加入點擊對焦事件
-    function setupTapToFocus() {
-        // 等待 video 元素出現
-        const checkVideo = setInterval(() => {
-            const video = document.querySelector("#reader video");
-            if (video && video.readyState > 0) {
-                clearInterval(checkVideo);
-                video.style.cursor = "pointer";
-                video.addEventListener("click", async (e) => {
-                    // 計算點擊位置相對於 video 的座標
-                    const rect = video.getBoundingClientRect();
-                    const x = e.clientX - rect.left;
-                    const y = e.clientY - rect.top;
-                    const centerX = rect.left + rect.width / 2;
-                    const centerY = rect.top + rect.height / 2;
-                    await setFocus(centerX, centerY);
-                });
-                console.log("點擊對焦已啟用");
-            }
-        }, 500);
-    }
 
     function showScanLine() { if (scanLine) scanLine.style.display = "block"; }
     function hideScanLine() { if (scanLine) scanLine.style.display = "none"; }
@@ -423,15 +325,11 @@
     function startScanner() {
         if (scannerStarted) return;
         html5QrCode = new Html5Qrcode("reader");
+        // 簡化的掃描設定，提高穩定性
         const config = { 
             fps: 15, 
-            qrbox: { width: 300, height: 300 },
-            aspectRatio: 1.0,
-            videoConstraints: {
-                facingMode: "environment",
-                focusMode: "continuous",
-                resizeMode: "crop-and-scale"
-            }
+            qrbox: { width: 280, height: 280 },
+            aspectRatio: 1.0
         };
         html5QrCode.start(
             { facingMode: "environment" }, 
@@ -441,23 +339,8 @@
         ).then(() => { 
             scannerStarted = true; 
             isInCooldown = false;
-            document.getElementById("scanStatus").innerHTML = "📸 相機已開啟<br>💡 點擊畫面可手動對焦";
+            document.getElementById("scanStatus").innerHTML = "📸 相機已開啟<br>📌 請對準黃線，手機距離條碼10-15cm";
             showScanLine();
-            
-            // 獲取影片軌道並設定點擊對焦
-            setTimeout(() => {
-                const video = document.querySelector("#reader video");
-                if (video) {
-                    // 取得媒體流軌道
-                    if (video.srcObject) {
-                        const tracks = video.srcObject.getVideoTracks();
-                        if (tracks.length > 0) {
-                            currentVideoTrack = tracks[0];
-                        }
-                    }
-                    setupTapToFocus();
-                }
-            }, 1000);
         }).catch(err => { 
             alert("無法開啟相機，請確認已授予相機權限"); 
             scannerStarted = false;
@@ -472,10 +355,6 @@
                 isInCooldown = false;
                 document.getElementById("scanStatus").innerText = "⏹️ 相機已停止";
                 hideScanLine();
-                if (currentVideoTrack) {
-                    currentVideoTrack.stop();
-                    currentVideoTrack = null;
-                }
             }).catch(()=>{}); 
         } else { 
             scannerStarted = false;
@@ -483,7 +362,7 @@
         }
     }
 
-    // 生成報告用的完整 HTML 文件
+    // 生成報告用的完整 HTML 文件（保持原有功能）
     function generateReportHTML() {
         const eventName = escapeHtml(eventNameInput.value) || "_____________";
         const eventLocation = escapeHtml(eventLocationInput.value) || "_____________";
@@ -499,7 +378,7 @@
         const registrarSigData = (registrarSignaturePad && !registrarSignaturePad.isEmpty()) ? registrarSignaturePad.toDataURL() : "";
         
         let itemsHtml = "";
-        if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td></tr>`;
+        if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td>`;
         else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td>`; });
         
         return `<!DOCTYPE html>
