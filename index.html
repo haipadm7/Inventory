@@ -26,8 +26,44 @@
         th { font-weight: 600; color: #495057; }
         .delete-btn { background: none; border: none; color: #ff3b30; font-size: 1.2rem; cursor: pointer; padding: 0 4px; }
         .progress-info { background: #e9ecef; border-radius: 20px; padding: 8px 12px; font-weight: 500; margin-bottom: 12px; }
-        #reader { width: 100%; max-width: 500px; margin: 0 auto; }
-        .scanner-area { text-align: center; }
+        #reader { width: 100%; max-width: 500px; margin: 0 auto; position: relative; }
+        .scanner-area { text-align: center; position: relative; }
+        /* 掃描器對準線 */
+        .scanner-overlay {
+            position: relative;
+            display: inline-block;
+        }
+        .scan-line {
+            position: absolute;
+            top: 50%;
+            left: 10%;
+            width: 80%;
+            height: 3px;
+            background-color: #ffcc00;
+            box-shadow: 0 0 5px #ffcc00, 0 0 10px #ffaa00;
+            transform: translateY(-50%);
+            z-index: 100;
+            pointer-events: none;
+            border-radius: 2px;
+        }
+        .scan-line::before,
+        .scan-line::after {
+            content: '';
+            position: absolute;
+            top: -8px;
+            width: 10px;
+            height: 19px;
+            border: 2px solid #ffcc00;
+            box-shadow: 0 0 3px #ffcc00;
+        }
+        .scan-line::before {
+            left: -5px;
+            border-right: none;
+        }
+        .scan-line::after {
+            right: -5px;
+            border-left: none;
+        }
         input, .search-box, textarea, select { padding: 10px; border-radius: 12px; border: 1px solid #ccc; width: 100%; font-size: 1rem; margin: 4px 0; }
         .pagination { display: flex; justify-content: center; gap: 12px; margin-top: 16px; }
         .page-btn { background: #e9ecef; color: #1c1c1e; padding: 6px 12px; border-radius: 30px; font-size: 0.9rem; border: none; cursor: pointer; }
@@ -89,7 +125,19 @@
         <div style="max-height: 300px; overflow-y: auto;"><table id="libraryTable"><thead><tr><th>Barcode</th><th>物品名稱</th><th></th></tr></thead><tbody id="libraryTbody"></tbody></table></div>
         <div class="pagination" id="paginationControls"></div>
     </div>
-    <div class="card scanner-area no-print"><h2>📷 掃描 Barcode</h2><div id="reader" style="width:100%;"></div><p id="scanStatus">✅ 點擊「開啟相機」開始掃描 (冷卻時間3秒)</p><button id="startScannerBtn">📱 開啟相機</button><button id="stopScannerBtn" class="secondary">⏹️ 停止相機</button></div>
+    
+    <!-- 掃描區 - 加入對準線 -->
+    <div class="card scanner-area no-print">
+        <h2>📷 掃描 Barcode</h2>
+        <div style="position: relative; display: inline-block; width: 100%;">
+            <div id="reader" style="width:100%;"></div>
+            <div id="scanLine" class="scan-line" style="display: none;"></div>
+        </div>
+        <p id="scanStatus">✅ 點擊「開啟相機」開始掃描 (冷卻時間3秒)</p>
+        <button id="startScannerBtn">📱 開啟相機</button>
+        <button id="stopScannerBtn" class="secondary">⏹️ 停止相機</button>
+    </div>
+    
     <div class="card"><h2>📋 今日領取清單 <span id="countDisplay">0 / 60</span></h2><div class="progress-info" id="progressMsg">尚未掃描任何物品</div><div style="max-height: 300px; overflow-y: auto;"><table id="todayListTable"><thead><tr><th>#</th><th>Barcode</th><th>物品名稱</th><th></th></tr></thead><tbody id="todayListBody"></tbody></table></div><div class="flex-row"><button id="printReportBtn">🖨️ 產生報告 (列印/存PDF)</button><button id="printBtn" class="secondary">🖨️ 列印簽名單</button><button id="clearTodayBtn" class="danger">🗑️ 清空今日清單</button></div></div>
     <div class="card no-print" id="extractorSection">
         <h2>✍️ 提取人及歸還資料</h2>
@@ -110,11 +158,13 @@
     // --- 固定參數 ---
     const MAX_ITEMS = 60;
     const SCAN_COOLDOWN_MS = 3000;
+    const FREEZE_DURATION = 1000; // 掃描成功後凍結1秒
 
     // --- 全域變數 ---
     let library = {};
     let todayItems = [];
     let lastScanTime = 0;
+    let isFrozen = false;      // 凍結標記
     let currentPage = 1;
     const PAGE_SIZE = 50;
     let currentSearchTerm = "";
@@ -134,6 +184,7 @@
     const countDisplay = document.getElementById("countDisplay");
     const progressMsg = document.getElementById("progressMsg");
     const syncStatusDiv = document.getElementById("syncStatus");
+    const scanLine = document.getElementById("scanLine");
 
     // 欄位
     const eventNameInput = document.getElementById("eventName");
@@ -146,6 +197,15 @@
     const extractDateInput = document.getElementById("extractDate");
     const returnDateInput = document.getElementById("returnDate");
     const registrarNameInput = document.getElementById("registrarName");
+
+    // 顯示對準線
+    function showScanLine() {
+        if (scanLine) scanLine.style.display = "block";
+    }
+    
+    function hideScanLine() {
+        if (scanLine) scanLine.style.display = "none";
+    }
 
     function showToast(message, isError = false) {
         const toast = document.createElement("div");
@@ -226,7 +286,118 @@
     function clearSignature() { if (signaturePad) signaturePad.clear(); localStorage.removeItem("signature_data"); }
     function clearRegistrarSignature() { if (registrarSignaturePad) registrarSignaturePad.clear(); localStorage.removeItem("registrar_signature_data"); }
 
-    // **修正：生成報告用的完整 HTML 文件，已確認無任何多餘文字**
+    // 凍結相機畫面1秒後恢復
+    async function freezeCameraAndResume() {
+        isFrozen = true;
+        if (html5QrCode && scannerStarted) {
+            // 暫時停止掃描器
+            await html5QrCode.stop();
+        }
+        // 顯示凍結狀態
+        const statusP = document.getElementById("scanStatus");
+        const originalText = statusP.innerText;
+        statusP.innerText = "⏸️ 掃描成功，畫面凍結 1 秒...";
+        
+        // 等待1秒
+        await new Promise(resolve => setTimeout(resolve, FREEZE_DURATION));
+        
+        // 重新啟動掃描器
+        if (html5QrCode && !scannerStarted) {
+            try {
+                await html5QrCode.start(
+                    { facingMode: "environment" }, 
+                    { fps: 15, qrbox: { width: 300, height: 300 } }, 
+                    onScanSuccess, 
+                    (errMsg) => {}
+                );
+                scannerStarted = true;
+                statusP.innerText = originalText;
+            } catch (err) {
+                console.error("重新啟動掃描器失敗:", err);
+                statusP.innerText = "⚠️ 掃描器恢復失敗，請重新開啟";
+                scannerStarted = false;
+            }
+        }
+        isFrozen = false;
+    }
+
+    // 掃描成功處理 (加入凍結功能)
+    async function onScanSuccess(decodedText) {
+        if (!scannerStarted || isFrozen) return;
+        
+        const now = Date.now();
+        if (now - lastScanTime < SCAN_COOLDOWN_MS) return;
+        if (todayItems.length >= MAX_ITEMS) { 
+            alert(`已達每日上限 ${MAX_ITEMS} 件`); 
+            return; 
+        }
+        const barcode = decodedText.trim();
+        if (todayItems.find(item => item.barcode === barcode)) { 
+            alert(`物品今日已經掃描過，不可重複領取`); 
+            return; 
+        }
+        let itemName = library[barcode];
+        if (!itemName) { 
+            let newName = prompt(`未找到物品「${barcode}」，請輸入物品名稱：`, "未知物品"); 
+            if (newName && newName.trim() !== "") { 
+                itemName = newName.trim(); 
+                library[barcode] = itemName; 
+                renderLibraryTable(); 
+            } else {
+                alert("沒有輸入名稱，跳過"); 
+                return;
+            }
+        }
+        lastScanTime = now;
+        todayItems.push({ barcode, name: itemName, timestamp: new Date().toISOString() });
+        saveToday();
+        if (navigator.vibrate) navigator.vibrate(200);
+        
+        // 顯示成功訊息
+        const statusP = document.getElementById("scanStatus");
+        const originalText = statusP.innerText;
+        statusP.innerText = `✅ 已記錄: ${itemName}`;
+        setTimeout(() => { 
+            if (scannerStarted && !isFrozen) statusP.innerText = originalText; 
+        }, 1500);
+        
+        // 凍結畫面1秒
+        await freezeCameraAndResume();
+    }
+
+    function startScanner() {
+        if (scannerStarted) return;
+        html5QrCode = new Html5Qrcode("reader");
+        html5QrCode.start(
+            { facingMode: "environment" }, 
+            { fps: 15, qrbox: { width: 300, height: 300 } }, 
+            onScanSuccess, 
+            (errMsg) => {}
+        ).then(() => { 
+            scannerStarted = true; 
+            document.getElementById("scanStatus").innerText = "📸 相機已開啟 (冷卻3秒，掃描成功會凍結1秒)";
+            showScanLine();  // 顯示對準線
+        }).catch(err => { 
+            alert("無法開啟相機，請確認已授予相機權限"); 
+            scannerStarted = false;
+            hideScanLine();
+        });
+    }
+
+    function stopScanner() {
+        if (html5QrCode && scannerStarted) { 
+            html5QrCode.stop().then(() => { 
+                scannerStarted = false; 
+                document.getElementById("scanStatus").innerText = "⏹️ 相機已停止";
+                hideScanLine();
+            }).catch(()=>{}); 
+        } else { 
+            scannerStarted = false;
+            hideScanLine();
+        }
+    }
+
+    // 生成報告用的完整 HTML 文件
     function generateReportHTML() {
         const eventName = escapeHtml(eventNameInput.value) || "_____________";
         const eventLocation = escapeHtml(eventLocationInput.value) || "_____________";
@@ -242,8 +413,8 @@
         const registrarSigData = (registrarSignaturePad && !registrarSignaturePad.isEmpty()) ? registrarSignaturePad.toDataURL() : "";
         
         let itemsHtml = "";
-        if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td>`;
-        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td></tr>`; });
+        if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td></tr>`;
+        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td>`; });
         
         return `<!DOCTYPE html>
         <html>
@@ -301,7 +472,6 @@
     
     function escapeHtml(str) { if (!str) return ""; return str.replace(/[&<>]/g, function(m) { if (m === '&') return '&amp;'; if (m === '<') return '&lt;'; if (m === '>') return '&gt;'; return m; }); }
 
-    // 打開報告視窗供列印或儲存 PDF
     function openReportForPrint() {
         const reportHtml = generateReportHTML();
         const printWindow = window.open('', '_blank');
@@ -315,7 +485,6 @@
         showToast("✅ 報告已開啟，請使用瀏覽器的「列印」功能儲存為PDF");
     }
 
-    // 確認儲存：儲存資料 + 開啟報告視窗
     async function confirmAndSave() {
         saveEventInfo();
         saveSignatures();
@@ -341,7 +510,7 @@
         toggleLibraryBtn.style.background = isLibraryVisible ? "#34c759" : "#007aff";
     }
 
-    // 載入 CSV 物品庫的其餘函數保持不變...
+    // 載入 CSV 物品庫
     async function loadLibraryFromCSV() {
         syncStatusDiv.innerHTML = "🔄 正在從 GitHub 載入物品庫...";
         try {
@@ -373,11 +542,6 @@
     function saveToday() { localStorage.setItem("today_items", JSON.stringify(todayItems)); renderTodayList(); }
     function loadData() { const storedToday = localStorage.getItem("today_items"); todayItems = storedToday ? JSON.parse(storedToday) : []; renderTodayList(); loadLibraryFromCSV(); loadEventInfo(); setDefaultDates(); }
     function renderTodayList() { todayListBody.innerHTML = ""; updateMaxDisplay(); todayItems.forEach((item, idx) => { const row = todayListBody.insertRow(); row.insertCell(0).innerText = idx+1; row.insertCell(1).innerText = item.barcode; row.insertCell(2).innerText = item.name; const delCell = row.insertCell(3); const delBtn = document.createElement("button"); delBtn.innerText = "❌"; delBtn.className = "delete-btn"; delBtn.onclick = () => { todayItems.splice(idx, 1); saveToday(); }; delCell.appendChild(delBtn); }); }
-
-    // 掃描邏輯保持不變...
-    async function onScanSuccess(decodedText) { if (!scannerStarted) return; const now = Date.now(); if (now - lastScanTime < SCAN_COOLDOWN_MS) return; if (todayItems.length >= MAX_ITEMS) { alert(`已達每日上限 ${MAX_ITEMS} 件`); return; } const barcode = decodedText.trim(); if (todayItems.find(item => item.barcode === barcode)) { alert(`物品今日已經掃描過，不可重複領取`); return; } let itemName = library[barcode]; if (!itemName) { let newName = prompt(`未找到物品「${barcode}」，請輸入物品名稱：`, "未知物品"); if (newName && newName.trim() !== "") { itemName = newName.trim(); library[barcode] = itemName; renderLibraryTable(); } else { alert("沒有輸入名稱，跳過"); return; } } lastScanTime = now; todayItems.push({ barcode, name: itemName, timestamp: new Date().toISOString() }); saveToday(); if (navigator.vibrate) navigator.vibrate(200); const statusP = document.getElementById("scanStatus"); const originalText = statusP.innerText; statusP.innerText = `✅ 已記錄: ${itemName}`; setTimeout(() => { if (scannerStarted) statusP.innerText = originalText; }, 1500); }
-    function startScanner() { if (scannerStarted) return; html5QrCode = new Html5Qrcode("reader"); html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: { width: 300, height: 300 } }, onScanSuccess, (errMsg) => {}).then(() => { scannerStarted = true; document.getElementById("scanStatus").innerText = "📸 相機已開啟 (冷卻3秒)"; }).catch(err => { alert("無法開啟相機，請確認已授予相機權限"); }); }
-    function stopScanner() { if (html5QrCode && scannerStarted) { html5QrCode.stop().then(() => { scannerStarted = false; document.getElementById("scanStatus").innerText = "⏹️ 相機已停止"; }).catch(()=>{}); } }
 
     // 事件綁定
     document.getElementById("printReportBtn").onclick = openReportForPrint;
