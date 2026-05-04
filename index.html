@@ -28,7 +28,7 @@
         .progress-info { background: #e9ecef; border-radius: 20px; padding: 8px 12px; font-weight: 500; margin-bottom: 12px; }
         #reader { width: 100%; max-width: 500px; margin: 0 auto; position: relative; }
         .scanner-area { text-align: center; position: relative; }
-        /* 掃描器對準線 - 1px 幼線 */
+        /* 掃描器對準線 */
         .scan-line {
             position: absolute;
             top: 50%;
@@ -57,6 +57,28 @@
         .scan-line::after {
             right: -5px;
             border-left: none;
+        }
+        /* 掃描成功浮層 */
+        .scan-success-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #ffcc00;
+            font-size: 1.5rem;
+            font-weight: bold;
+            padding: 12px 24px;
+            border-radius: 40px;
+            z-index: 150;
+            white-space: nowrap;
+            pointer-events: none;
+            animation: fadeOut 1s ease-in-out forwards;
+        }
+        @keyframes fadeOut {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            70% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1.2); visibility: hidden; }
         }
         input, .search-box, textarea, select { padding: 10px; border-radius: 12px; border: 1px solid #ccc; width: 100%; font-size: 1rem; margin: 4px 0; }
         .manual-input-area { background: #f8f9fa; border-radius: 20px; padding: 12px; margin-top: 12px; }
@@ -128,6 +150,7 @@
         <div style="position: relative; display: inline-block; width: 100%;">
             <div id="reader" style="width:100%;"></div>
             <div id="scanLine" class="scan-line" style="display: none;"></div>
+            <div id="successOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 200;"></div>
         </div>
         <p id="scanStatus">✅ 點擊「開啟相機」開始掃描</p>
         <button id="startScannerBtn">📱 開啟相機</button>
@@ -162,8 +185,8 @@
 <script>
     // --- 固定參數 ---
     const MAX_ITEMS = 60;
-    const SCAN_COOLDOWN_MS = 2000; // 掃描成功後冷卻2秒
-    const FREEZE_DURATION = 2000;   // 凍結時間2秒
+    const SCAN_COOLDOWN_MS = 2000; // 總冷卻2秒 (含顯示成功提示)
+    const SUCCESS_DISPLAY_MS = 1000; // 成功提示顯示1秒
 
     // --- 全域變數 ---
     let library = {};
@@ -192,6 +215,7 @@
     const scanLine = document.getElementById("scanLine");
     const manualBarcodeInput = document.getElementById("manualBarcode");
     const manualAddBtn = document.getElementById("manualAddBtn");
+    const successOverlay = document.getElementById("successOverlay");
 
     // 欄位
     const eventNameInput = document.getElementById("eventName");
@@ -204,6 +228,22 @@
     const extractDateInput = document.getElementById("extractDate");
     const returnDateInput = document.getElementById("returnDate");
     const registrarNameInput = document.getElementById("registrarName");
+
+    // 顯示相機畫面上的成功提示 (持續1秒)
+    function showCameraSuccessMessage() {
+        const overlay = successOverlay;
+        if (!overlay) return;
+        const messageDiv = document.createElement("div");
+        messageDiv.className = "scan-success-overlay";
+        messageDiv.innerText = "✅ 掃描成功！";
+        // 清除之前的提示
+        while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
+        overlay.appendChild(messageDiv);
+        // 1秒後移除
+        setTimeout(() => {
+            if (messageDiv.parentNode) messageDiv.parentNode.removeChild(messageDiv);
+        }, SUCCESS_DISPLAY_MS);
+    }
 
     function showScanLine() { if (scanLine) scanLine.style.display = "block"; }
     function hideScanLine() { if (scanLine) scanLine.style.display = "none"; }
@@ -254,7 +294,12 @@
         saveToday();
         if (navigator.vibrate) navigator.vibrate(200);
         
-        // 顯示成功訊息
+        // 顯示成功提示 (相機畫面上)
+        if (source === "掃描") {
+            showCameraSuccessMessage();
+        }
+        
+        // 顯示狀態列訊息
         const statusP = document.getElementById("scanStatus");
         const originalText = statusP.innerText;
         statusP.innerText = `✅ 已記錄 (${source}): ${itemName}`;
@@ -262,7 +307,7 @@
             if (scannerStarted && !isInCooldown) statusP.innerText = originalText;
         }, 1500);
         
-        // 啟動冷卻
+        // 啟動冷卻 (總長2秒)
         await startCooldown();
         return true;
     }
@@ -283,8 +328,8 @@
         isInCooldown = true;
         const statusP = document.getElementById("scanStatus");
         const originalText = statusP.innerText;
-        statusP.innerText = "⏸️ 掃描/輸入成功，請稍候 2 秒...";
-        await new Promise(resolve => setTimeout(resolve, FREEZE_DURATION));
+        statusP.innerText = "⏸️ 請稍候 2 秒...";
+        await new Promise(resolve => setTimeout(resolve, SCAN_COOLDOWN_MS));
         isInCooldown = false;
         if (scannerStarted) statusP.innerText = originalText;
     }
@@ -457,7 +502,7 @@
         
         let itemsHtml = "";
         if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td></tr>`;
-        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td></tr>`; });
+        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td>`; });
         
         return `<!DOCTYPE html>
         <html>
@@ -487,16 +532,16 @@
         <div class="report-for-print">
             <h1>📋 物品領取簽名單</h1>
             <table class="info-table">
-                <tr><td><strong>節目名稱</strong></td><td>${eventName}</td></tr>
-                <tr><td><strong>地點</strong></td><td>${eventLocation}</td></tr>
-                <tr><td><strong>使用日期</strong></td><td>${eventDate}</td></tr>
-                <tr><td><strong>提取人姓名</strong></td><td>${extractorName}</td></tr>
-                <tr><td><strong>部門</strong></td><td>${extractorDepartment}</td></tr>
-                <tr><td><strong>職位</strong></td><td>${extractorPosition}</td></tr>
-                <tr><td><strong>聯絡電話</strong></td><td>${extractorPhone}</td></tr>
-                <tr><td><strong>提取日期</strong></td><td>${extractDate}</td></tr>
-                <tr><td><strong>歸還日期</strong></td><td>${returnDate}</td></tr>
-                <tr><td><strong>登記人姓名</strong></td><td>${registrarName}</td></tr>
+                <tr><td><strong>節目名稱</strong></td><td>${escapeHtml(eventName)}</td></tr>
+                <tr><td><strong>地點</strong></td><td>${escapeHtml(eventLocation)}</td></tr>
+                <tr><td><strong>使用日期</strong></td><td>${escapeHtml(eventDate)}</td></tr>
+                <tr><td><strong>提取人姓名</strong></td><td>${escapeHtml(extractorName)}</td></tr>
+                <tr><td><strong>部門</strong></td><td>${escapeHtml(extractorDepartment)}</td></tr>
+                <tr><td><strong>職位</strong></td><td>${escapeHtml(extractorPosition)}</td></tr>
+                <tr><td><strong>聯絡電話</strong></td><td>${escapeHtml(extractorPhone)}</td></tr>
+                <tr><td><strong>提取日期</strong></td><td>${escapeHtml(extractDate)}</td></tr>
+                <tr><td><strong>歸還日期</strong></td><td>${escapeHtml(returnDate)}</td></tr>
+                <tr><td><strong>登記人姓名</strong></td><td>${escapeHtml(registrarName)}</td></tr>
             </table>
             <h3>📦 領取物品清單 (共 ${todayItems.length} 件)</h3>
             <table class="item-table">
