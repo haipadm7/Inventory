@@ -58,7 +58,7 @@
             right: -5px;
             border-left: none;
         }
-        /* 掃描成功浮層 */
+        /* 掃描成功浮層 - 停留2秒 */
         .scan-success-overlay {
             position: absolute;
             top: 50%;
@@ -73,7 +73,7 @@
             z-index: 150;
             white-space: nowrap;
             pointer-events: none;
-            animation: fadeOut 1s ease-in-out forwards;
+            animation: fadeOut 2s ease-in-out forwards;
         }
         @keyframes fadeOut {
             0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
@@ -186,7 +186,7 @@
     // --- 固定參數 ---
     const MAX_ITEMS = 60;
     const SCAN_COOLDOWN_MS = 2000; // 總冷卻2秒 (含顯示成功提示)
-    const SUCCESS_DISPLAY_MS = 1000; // 成功提示顯示1秒
+    const SUCCESS_DISPLAY_MS = 2000; // 成功提示顯示2秒
 
     // --- 全域變數 ---
     let library = {};
@@ -229,7 +229,7 @@
     const returnDateInput = document.getElementById("returnDate");
     const registrarNameInput = document.getElementById("registrarName");
 
-    // 顯示相機畫面上的成功提示 (持續1秒)
+    // 顯示相機畫面上的成功提示 (持續2秒)
     function showCameraSuccessMessage() {
         const overlay = successOverlay;
         if (!overlay) return;
@@ -239,7 +239,7 @@
         // 清除之前的提示
         while (overlay.firstChild) overlay.removeChild(overlay.firstChild);
         overlay.appendChild(messageDiv);
-        // 1秒後移除
+        // 2秒後移除
         setTimeout(() => {
             if (messageDiv.parentNode) messageDiv.parentNode.removeChild(messageDiv);
         }, SUCCESS_DISPLAY_MS);
@@ -502,7 +502,7 @@
         
         let itemsHtml = "";
         if (todayItems.length === 0) itemsHtml = `<tr><td colspan="3" style="text-align:center;">（無領取記錄）</td></tr>`;
-        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td>`; });
+        else todayItems.forEach((item, idx) => { itemsHtml += `<tr><td style="text-align:center;">${idx+1}</td><td>${escapeHtml(item.barcode)}</td><td>${escapeHtml(item.name)}</td></tr>`; });
         
         return `<!DOCTYPE html>
         <html>
